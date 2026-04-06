@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>E-Hotels Control Deck</title>
+    <meta
+      name="description"
+      content="Room discovery, booking, renting, and management console for the E-Hotels project."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb orb-a" aria-hidden="true"></div>
+    <div class="bg-orb orb-b" aria-hidden="true"></div>
+    <div class="bg-grid" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Five Chains, One Console</p>
+        <h1>E-Hotels Frontend</h1>
+      </div>
+      <div class="session-card">
+        <p class="label">Session</p>
+        <p id="sessionIdentity" class="session-identity">Guest mode</p>
+        <p id="sessionRole" class="session-role">No role selected</p>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <button
+          id="nav-auth"
+          class="nav-btn active"
+          data-nav-target="section-auth"
+        >
+          API and Login
+        </button>
+        <button
+          id="nav-search"
+          class="nav-btn"
+          data-nav-target="section-search"
+        >
+          Search and Booking
+        </button>
+        <button
+          id="nav-renting"
+          class="nav-btn"
+          data-nav-target="section-renting"
+          data-role-required="ROLE_EMPLOYEE"
+        >
+          Renting and Check-In
+        </button>
+        <button
+          id="nav-management"
+          class="nav-btn"
+          data-nav-target="section-management"
+          data-role-required="ROLE_EMPLOYEE"
+        >
+          Management CRUD
+        </button>
+        <button
+          id="nav-insights"
+          class="nav-btn"
+          data-nav-target="section-insights"
+        >
+          Views and Analytics
+        </button>
+        <p class="sidebar-note">
+          Live filters trigger search automatically when criteria change.
+        </p>
+      </aside>
+
+      <section class="content">
+        <section id="section-auth" class="panel active">
+          <div class="panel-head">
+            <h2>API Configuration and Authentication</h2>
+            <p>
+              Connect to your Spring backend and authenticate with employee or
+              customer role.
+            </p>
+          </div>
+
+          <div class="card-grid two">
+            <article class="card">
+              <h3>Backend Endpoint</h3>
+              <form id="apiConfigForm" class="form-grid">
+                <label class="field">
+                  <span>Base URL</span>
+                  <input
+                    id="apiBaseUrl"
+                    name="apiBaseUrl"
+                    type="url"
+                    placeholder="https://your-host.example.com"
+                    required
+                  />
+                </label>
+                <div class="actions">
+                  <button type="submit">Save Endpoint</button>
+                  <button id="testConnectionBtn" type="button" class="ghost">
+                    Test Connection
+                  </button>
+                </div>
+              </form>
+              <p id="apiStatus" class="status"></p>
+            </article>
+
+            <article class="card">
+              <h3>Login</h3>
+              <form id="loginForm" class="form-grid">
+                <label class="field">
+                  <span>Username / ID</span>
+                  <input
+                    id="loginUsername"
+                    name="username"
+                    type="text"
+                    placeholder="111-000-001"
+                    required
+                  />
+                </label>
+                <label class="field">
+                  <span>Role</span>
+                  <select id="loginRole" name="role" required>
+                    <option value="ROLE_CUSTOMER">Customer</option>
+                    <option value="ROLE_EMPLOYEE">Employee</option>
+                  </select>
+                </label>
+                <div class="actions">
+                  <button type="submit">Login and Store JWT</button>
+                  <button id="logoutBtn" type="button" class="ghost">
+                    Logout
+                  </button>
+                </div>
+              </form>
+              <p id="authStatus" class="status"></p>
+            </article>
+          </div>
+        </section>
+
+        <section id="section-search" class="panel">
+          <div class="panel-head">
+            <h2>Room Discovery and Booking</h2>
+            <p>
+              Filter by any criteria combination. Results refresh automatically
+              when values change.
+            </p>
+          </div>
+
+          <article class="card">
+            <form id="searchForm" class="form-grid search-grid">
+              <label class="field">
+                <span>Start Date</span>
+                <input
+                  id="searchStartDate"
+                  data-search-field="startDate"
+                  type="date"
+                />
+              </label>
+              <label class="field">
+                <span>End Date</span>
+                <input
+                  id="searchEndDate"
+                  data-search-field="endDate"
+                  type="date"
+                />
+              </label>
+              <label class="field">
+                <span>Capacity</span>
+                <input
+                  id="searchCapacity"
+                  data-search-field="capacity"
+                  type="number"
+                  min="1"
+                  placeholder="2"
+                />
+              </label>
+              <label class="field">
+                <span>Area</span>
+                <input
+                  id="searchArea"
+                  data-search-field="area"
+                  type="text"
+                  placeholder="Toronto"
+                />
+              </label>
+              <label class="field">
+                <span>Hotel Chain</span>
+                <input
+                  id="searchChainName"
+                  data-search-field="chainName"
+                  type="text"
+                  placeholder="Continental Group"
+                />
+              </label>
+              <label class="field">
+                <span>Hotel Category Rating</span>
+                <input
+                  id="searchCategoryRating"
+                  data-search-field="categoryRating"
+                  type="number"
+                  min="1"
+                  max="5"
+                  placeholder="4"
+                />
+              </label>
+              <label class="field">
+                <span>Min Total Rooms (hotel)</span>
+                <input
+                  id="searchMinTotalRooms"
+                  data-search-field="minTotalRooms"
+                  type="number"
+                  min="1"
+                  placeholder="100"
+                />
+              </label>
+              <label class="field">
+                <span>Max Price</span>
+                <input
+                  id="searchMaxPrice"
+                  data-search-field="maxPrice"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="300"
+                />
+              </label>
+              <div class="actions wide">
+                <button id="searchNowBtn" type="submit">Refresh Results</button>
+                <button id="searchClearBtn" type="button" class="ghost">
+                  Clear Filters
+                </button>
+              </div>
+            </form>
+            <p id="searchStatus" class="status"></p>
+          </article>
+
+          <article class="card">
+            <div class="card-header-line">
+              <h3>Available Room Results</h3>
+              <p id="searchMeta" class="meta">No query yet.</p>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead id="searchResultsHead"></thead>
+                <tbody id="searchResultsBody"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="card">
+            <h3>Create Booking</h3>
+            <p class="helper">
+              Select a row from results to auto-fill room ID, or enter manually.
+            </p>
+            <form id="bookingForm" class="form-grid three">
+              <label class="field">
+                <span>Customer ID</span>
+                <input
+                  id="bookingCustId"
+                  type="text"
+                  placeholder="222-000-001"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span>Room ID</span>
+                <input id="bookingRoomId" type="text" required />
+              </label>
+              <label class="field">
+                <span>Start Date</span>
+                <input id="bookingStartDate" type="date" required />
+              </label>
+              <label class="field">
+                <span>End Date</span>
+                <input id="bookingEndDate" type="date" required />
+              </label>
+              <div class="actions wide">
+                <button type="submit">Create Booking</button>
+              </div>
+            </form>
+            <p id="bookingStatus" class="status"></p>
+          </article>
+        </section>
+
+        <section id="section-renting" class="panel">
+          <div class="panel-head">
+            <h2>Employee Renting and Check-In</h2>
+            <p>
+              Convert a booking to renting or create a direct renting with
+              payment details.
+            </p>
+          </div>
+
+          <article class="card">
+            <form id="rentingForm" class="form-grid three">
+              <label class="field">
+                <span>Booking ID (optional)</span>
+                <input
+                  id="rentingBookingId"
+                  type="number"
+                  min="1"
+                  placeholder="10"
+                />
+              </label>
+              <label class="field">
+                <span>Customer ID</span>
+                <input
+                  id="rentingCustId"
+                  type="text"
+                  placeholder="222-000-001"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span>Room ID</span>
+                <input id="rentingRoomId" type="number" min="1" required />
+              </label>
+              <label class="field">
+                <span>Employee ID</span>
+                <input
+                  id="rentingEmployeeId"
+                  type="text"
+                  placeholder="111-000-001"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span>Check-In Date</span>
+                <input id="rentingCheckInDate" type="date" required />
+              </label>
+              <label class="field">
+                <span>Check-Out Date</span>
+                <input id="rentingCheckOutDate" type="date" required />
+              </label>
+              <label class="field">
+                <span>Payment Amount</span>
+                <input
+                  id="rentingPaymentAmount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="1500"
+                  required
+                />
+              </label>
+              <div class="actions wide">
+                <button type="submit">Execute Renting / Check-In</button>
+              </div>
+            </form>
+            <p id="rentingStatus" class="status"></p>
+          </article>
+        </section>
+
+        <section id="section-management" class="panel">
+          <div class="panel-head">
+            <h2>Management CRUD Workbench</h2>
+            <p>
+              Insert, update, delete, and inspect Customers, Employees, Hotels,
+              and Rooms.
+            </p>
+          </div>
+
+          <article class="card">
+            <div class="toolbar">
+              <label class="field compact">
+                <span>Entity</span>
+                <select id="entitySelect">
+                  <option value="customers">Customers</option>
+                  <option value="employees">Employees</option>
+                  <option value="hotels">Hotels</option>
+                  <option value="rooms">Rooms</option>
+                </select>
+              </label>
+              <button id="entityRefreshBtn" type="button" class="ghost">
+                Refresh List
+              </button>
+            </div>
+            <p class="helper">
+              Use templates as starting point; payload keys can be adjusted to
+              match your backend DTOs.
+            </p>
+            <p id="managementStatus" class="status"></p>
+          </article>
+
+          <div class="card-grid two">
+            <article class="card">
+              <h3>Create Record</h3>
+              <form id="createForm" class="form-grid">
+                <label class="field">
+                  <span>Create Payload (JSON)</span>
+                  <textarea
+                    id="createPayload"
+                    rows="10"
+                    spellcheck="false"
+                  ></textarea>
+                </label>
+                <div class="actions">
+                  <button type="submit">Insert</button>
+                </div>
+              </form>
+            </article>
+
+            <article class="card">
+              <h3>Update or Delete</h3>
+              <form id="updateForm" class="form-grid">
+                <label class="field">
+                  <span>Record ID</span>
+                  <input
+                    id="recordId"
+                    type="text"
+                    placeholder="Entity-specific ID"
+                    required
+                  />
+                </label>
+                <label class="field">
+                  <span>Update Payload (JSON)</span>
+                  <textarea
+                    id="updatePayload"
+                    rows="8"
+                    spellcheck="false"
+                  ></textarea>
+                </label>
+                <div class="actions">
+                  <button type="submit">Update</button>
+                  <button id="deleteBtn" type="button" class="danger">
+                    Delete
+                  </button>
+                </div>
+              </form>
+            </article>
+          </div>
+
+          <article class="card">
+            <div class="card-header-line">
+              <h3>Entity Records</h3>
+              <p id="entityMeta" class="meta"></p>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead id="entityTableHead"></thead>
+                <tbody id="entityTableBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section id="section-insights" class="panel">
+          <div class="panel-head">
+            <h2>SQL Views and Analytics</h2>
+            <p>
+              Display required SQL views plus additional query endpoints for
+              reporting.
+            </p>
+          </div>
+
+          <article class="card">
+            <h3>Views</h3>
+            <div class="actions">
+              <button id="refreshViewsBtn" type="button">
+                Refresh Required Views
+              </button>
+            </div>
+            <p id="insightsStatus" class="status"></p>
+
+            <div class="insight-grid">
+              <section>
+                <h4>View 1: Available Rooms Per Area</h4>
+                <div id="viewAvailableRoomsPerArea" class="dataset"></div>
+              </section>
+              <section>
+                <h4>View 2: Hotel Capacity (Aggregated Room Capacity)</h4>
+                <div id="viewHotelCapacity" class="dataset"></div>
+              </section>
+            </div>
+          </article>
+
+          <article class="card">
+            <h3>Additional Queries</h3>
+            <div class="actions">
+              <button id="refreshQueriesBtn" type="button" class="ghost">
+                Refresh All Query Endpoints
+              </button>
+            </div>
+
+            <form id="queryAvailableRoomsForm" class="form-grid three">
+              <label class="field">
+                <span>Hotel ID</span>
+                <input
+                  id="queryHotelId"
+                  type="number"
+                  min="1"
+                  placeholder="1"
+                />
+              </label>
+              <label class="field">
+                <span>Start Date</span>
+                <input id="queryStartDate" type="date" />
+              </label>
+              <label class="field">
+                <span>End Date</span>
+                <input id="queryEndDate" type="date" />
+              </label>
+              <div class="actions wide">
+                <button type="submit">Run Available Rooms Query</button>
+              </div>
+            </form>
+
+            <div class="insight-grid">
+              <section>
+                <h4>Top Spending Customer</h4>
+                <div id="queryTopSpendingCustomer" class="dataset"></div>
+              </section>
+              <section>
+                <h4>Top Rated Hotels</h4>
+                <div id="queryTopRatedHotels" class="dataset"></div>
+              </section>
+              <section>
+                <h4>Hotel Stats</h4>
+                <div id="queryHotelStats" class="dataset"></div>
+              </section>
+              <section>
+                <h4>Available Rooms Query</h4>
+                <div id="queryAvailableRooms" class="dataset"></div>
+              </section>
+            </div>
+          </article>
+        </section>
+      </section>
+    </main>
+
+    <div id="toastHost" class="toast-host" aria-live="polite"></div>
+
+    <footer class="footer">
+      <p>
+        Built to satisfy the E-Hotels course requirements using the provided
+        OpenAPI endpoints.
+      </p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
