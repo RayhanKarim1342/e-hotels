@@ -1801,6 +1801,7 @@ async function fetchEmployeeRentings() {
 
 async function fetchEmployeeBookings() {
   const endpoints = [
+    "/api/management/bookings/open",
     "/api/management/bookings",
     "/api/management/booking",
     "/api/management/bookings/all",
@@ -2411,40 +2412,56 @@ async function apiRequest(path, options = {}) {
     throw new Error("API base URL is not configured.");
   }
 
-  const url = new URL(state.apiBaseUrl.replace(/\/+$/, "") + path);
-  const query = options.query || {};
+  const executeRequest = async () => {
+    const url = new URL(state.apiBaseUrl.replace(/\/+$/, "") + path);
+    const query = options.query || {};
 
-  Object.entries(query).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
-      url.searchParams.set(key, String(value));
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        url.searchParams.set(key, String(value));
+      }
+    });
+
+    const headers = {
+      Accept: "application/json, text/plain, */*",
+    };
+
+    if (options.body !== undefined) {
+      headers["Content-Type"] = "application/json";
     }
-  });
 
-  const headers = {
-    Accept: "application/json, text/plain, */*",
+    if (isNgrokHost(url.hostname)) {
+      headers["ngrok-skip-browser-warning"] = "true";
+    }
+
+    if (state.token && options.auth !== false) {
+      headers.Authorization = state.token.startsWith("Bearer ")
+        ? state.token
+        : `Bearer ${state.token}`;
+    }
+
+    const response = await fetch(url.toString(), {
+      method: options.method || "GET",
+      headers,
+      body:
+        options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    });
+
+    const payload = await parseResponse(response);
+    return { response, payload };
   };
 
-  if (options.body !== undefined) {
-    headers["Content-Type"] = "application/json";
+  let { response, payload } = await executeRequest();
+
+  const shouldAttemptRefresh =
+    options.auth !== false && (response.status === 401 || response.status === 403);
+
+  if (!response.ok && shouldAttemptRefresh) {
+    const refreshed = await tryRefreshAuthToken();
+    if (refreshed) {
+      ({ response, payload } = await executeRequest());
+    }
   }
-
-  if (isNgrokHost(url.hostname)) {
-    headers["ngrok-skip-browser-warning"] = "true";
-  }
-
-  if (state.token && options.auth !== false) {
-    headers.Authorization = state.token.startsWith("Bearer ")
-      ? state.token
-      : `Bearer ${state.token}`;
-  }
-
-  const response = await fetch(url.toString(), {
-    method: options.method || "GET",
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
-
-  const payload = await parseResponse(response);
 
   if (!response.ok) {
     const message = describeError(payload, response.status);
@@ -2452,6 +2469,53 @@ async function apiRequest(path, options = {}) {
   }
 
   return payload;
+}
+
+async function tryRefreshAuthToken() {
+  const hasSessionIdentity = Boolean(state.username?.trim()) && Boolean(state.role);
+  if (!state.apiBaseUrl || !hasSessionIdentity) {
+    return false;
+  }
+
+  const url = new URL(
+    state.apiBaseUrl.replace(/\/+$/, "") + "/api/auth/login",
+  );
+
+  const headers = {
+    Accept: "application/json, text/plain, */*",
+    "Content-Type": "application/json",
+  };
+
+  if (isNgrokHost(url.hostname)) {
+    headers["ngrok-skip-browser-warning"] = "true";
+  }
+
+  try {
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        username: state.username.trim(),
+        role: state.role,
+      }),
+    });
+
+    const payload = await parseResponse(response);
+    if (!response.ok) {
+      return false;
+    }
+
+    const token = extractToken(payload);
+    if (!token) {
+      return false;
+    }
+
+    state.token = token;
+    localStorage.setItem("ehotels_token", token);
+    return true;
+  } catch (error) {
+    return false;
+  }
 }
 
 async function parseResponse(response) {
@@ -2472,6 +2536,10 @@ async function parseResponse(response) {
 }
 
 function describeError(payload, status) {
+  if (status === 403) {
+    return "403: Forbidden. This endpoint requires an employee session (ROLE_EMPLOYEE). Log in again as an employee and retry.";
+  }
+
   if (typeof payload === "string") {
     const ngrokCode = payload.match(/ERR_NGROK_\d+/i)?.[0];
     if (ngrokCode) {
