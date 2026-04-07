@@ -23,8 +23,10 @@
 
     <header class="topbar">
       <div>
-        <p class="eyebrow">Five Chains, One Console</p>
-        <h1>E-Hotels Frontend</h1>
+        <p class="eyebrow">
+          All your favourite hotels available in just one website
+        </p>
+        <h1>E-Hotels</h1>
       </div>
       <div class="session-card">
         <p class="label">Session</p>
@@ -63,7 +65,7 @@
           data-nav-target="section-management"
           data-role-required="ROLE_EMPLOYEE"
         >
-          Management CRUD
+          Employee Management Portal
         </button>
         <button
           id="nav-insights"
@@ -82,8 +84,7 @@
           <div class="panel-head">
             <h2>API Configuration and Authentication</h2>
             <p>
-              Connect to your Spring backend and authenticate with employee or
-              customer role.
+              Manual connection to backend API and login for customer / employee
             </p>
           </div>
 
@@ -132,7 +133,7 @@
                   </select>
                 </label>
                 <div class="actions">
-                  <button type="submit">Login and Store JWT</button>
+                  <button type="submit">Login</button>
                   <button id="logoutBtn" type="button" class="ghost">
                     Logout
                   </button>
@@ -253,24 +254,20 @@
             </div>
           </article>
 
-          <article class="card">
+          <article id="bookingCard" class="card">
             <h3>Create Booking</h3>
             <p class="helper">
-              Select a row from results to auto-fill room ID, or enter manually.
+              Select a room from the results table, then choose your booking
+              start and end dates.
             </p>
             <form id="bookingForm" class="form-grid three">
               <label class="field">
-                <span>Customer ID</span>
-                <input
-                  id="bookingCustId"
-                  type="text"
-                  placeholder="222-000-001"
-                  required
-                />
+                <span>Customer ID (from login)</span>
+                <input id="bookingCustomerDisplay" type="text" readonly />
               </label>
               <label class="field">
-                <span>Room ID</span>
-                <input id="bookingRoomId" type="text" required />
+                <span>Selected Room ID</span>
+                <input id="bookingRoomId" type="text" readonly required />
               </label>
               <label class="field">
                 <span>Start Date</span>
@@ -286,6 +283,61 @@
             </form>
             <p id="bookingStatus" class="status"></p>
           </article>
+
+          <article id="guestAccountCard" class="card hidden">
+            <h3>Create an Account</h3>
+            <p class="helper">
+              Guests can create a customer account here. After account creation,
+              you will be logged in as a customer.
+            </p>
+            <form id="guestAccountForm" class="form-grid three">
+              <label class="field">
+                <span>Customer ID</span>
+                <input
+                  id="guestCustId"
+                  type="text"
+                  placeholder="333-000-001"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span>Full Name</span>
+                <input
+                  id="guestCustomerName"
+                  type="text"
+                  placeholder="Jane Doe"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span>ID Type</span>
+                <select id="guestIdType" required>
+                  <option value="">Select ID Type</option>
+                  <option value="driving licence">Driving Licence</option>
+                  <option value="passport">Passport</option>
+                  <option value="SSN">SSN</option>
+                  <option value="SIN">SIN</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Address</span>
+                <input
+                  id="guestCustomerAddress"
+                  type="text"
+                  placeholder="123 Fake St, Ottawa, ON"
+                  required
+                />
+              </label>
+              <label class="field">
+                <span>Date Of Registration</span>
+                <input id="guestDateOfRegistration" type="date" required />
+              </label>
+              <div class="actions wide">
+                <button type="submit">Create Account</button>
+              </div>
+            </form>
+            <p id="guestAccountStatus" class="status"></p>
+          </article>
         </section>
 
         <section id="section-renting" class="panel">
@@ -296,6 +348,65 @@
               payment details.
             </p>
           </div>
+
+          <article class="card">
+            <h3>Find Existing Bookings</h3>
+            <p class="helper">
+              Filter bookings, then click Use to auto-fill renting fields.
+            </p>
+            <form id="bookingFilterForm" class="form-grid search-grid">
+              <label class="field">
+                <span>Booking ID</span>
+                <input
+                  id="bookingFilterBookingId"
+                  type="text"
+                  placeholder="10"
+                />
+              </label>
+              <label class="field">
+                <span>Customer ID</span>
+                <input
+                  id="bookingFilterCustId"
+                  type="text"
+                  placeholder="222-000-001"
+                />
+              </label>
+              <label class="field">
+                <span>Room ID</span>
+                <input id="bookingFilterRoomId" type="text" placeholder="1" />
+              </label>
+              <label class="field">
+                <span>Start Date</span>
+                <input id="bookingFilterStartDate" type="date" />
+              </label>
+              <label class="field">
+                <span>End Date</span>
+                <input id="bookingFilterEndDate" type="date" />
+              </label>
+              <div class="actions wide">
+                <button id="bookingFilterRefreshBtn" type="submit">
+                  Refresh Bookings
+                </button>
+                <button id="bookingFilterClearBtn" type="button" class="ghost">
+                  Clear Filters
+                </button>
+              </div>
+            </form>
+            <p id="bookingFilterStatus" class="status"></p>
+          </article>
+
+          <article class="card">
+            <div class="card-header-line">
+              <h3>Booking Results</h3>
+              <p id="bookingFilterMeta" class="meta">No query yet.</p>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead id="bookingFilterResultsHead"></thead>
+                <tbody id="bookingFilterResultsBody"></tbody>
+              </table>
+            </div>
+          </article>
 
           <article class="card">
             <form id="rentingForm" class="form-grid three">
@@ -322,12 +433,12 @@
                 <input id="rentingRoomId" type="number" min="1" required />
               </label>
               <label class="field">
-                <span>Employee ID</span>
+                <span>Employee ID (from login)</span>
                 <input
                   id="rentingEmployeeId"
                   type="text"
-                  placeholder="111-000-001"
-                  required
+                  placeholder="Login as ROLE_EMPLOYEE"
+                  readonly
                 />
               </label>
               <label class="field">
@@ -359,7 +470,7 @@
 
         <section id="section-management" class="panel">
           <div class="panel-head">
-            <h2>Management CRUD Workbench</h2>
+            <h2>Employee Management Portal</h2>
             <p>
               Insert, update, delete, and inspect Customers, Employees, Hotels,
               and Rooms.
@@ -538,8 +649,8 @@
 
     <footer class="footer">
       <p>
-        Built to satisfy the E-Hotels course requirements using the provided
-        OpenAPI endpoints.
+        Built for Databases (CSI2132) Deliverable 2 - Rayhan Karim, Abdullah
+        Zubair, Samarventhan Surendran
       </p>
     </footer>
 

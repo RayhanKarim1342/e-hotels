@@ -5,6 +5,8 @@ const state = {
   username: "",
   searchResults: [],
   selectedRoom: null,
+  employeeBookings: [],
+  filteredEmployeeBookings: [],
   activeEntity: "customers",
   entityRows: [],
 };
@@ -111,6 +113,14 @@ const SEARCH_FIELDS = [
   "maxPrice",
 ];
 
+const BOOKING_FILTER_FIELDS = [
+  "bookingFilterBookingId",
+  "bookingFilterCustId",
+  "bookingFilterRoomId",
+  "bookingFilterStartDate",
+  "bookingFilterEndDate",
+];
+
 const dom = {};
 
 document.addEventListener("DOMContentLoaded", init);
@@ -122,6 +132,7 @@ async function init() {
   bindAuth();
   bindSearch();
   bindBooking();
+  bindGuestAccount();
   bindRenting();
   bindManagement();
   bindInsights();
@@ -164,12 +175,49 @@ function mapDom() {
   dom.searchResultsHead = document.getElementById("searchResultsHead");
   dom.searchResultsBody = document.getElementById("searchResultsBody");
 
+  dom.bookingCard = document.getElementById("bookingCard");
   dom.bookingForm = document.getElementById("bookingForm");
-  dom.bookingCustId = document.getElementById("bookingCustId");
+  dom.bookingCustomerDisplay = document.getElementById(
+    "bookingCustomerDisplay",
+  );
   dom.bookingRoomId = document.getElementById("bookingRoomId");
   dom.bookingStartDate = document.getElementById("bookingStartDate");
   dom.bookingEndDate = document.getElementById("bookingEndDate");
   dom.bookingStatus = document.getElementById("bookingStatus");
+
+  dom.guestAccountCard = document.getElementById("guestAccountCard");
+  dom.guestAccountForm = document.getElementById("guestAccountForm");
+  dom.guestCustId = document.getElementById("guestCustId");
+  dom.guestCustomerName = document.getElementById("guestCustomerName");
+  dom.guestIdType = document.getElementById("guestIdType");
+  dom.guestCustomerAddress = document.getElementById("guestCustomerAddress");
+  dom.guestDateOfRegistration = document.getElementById(
+    "guestDateOfRegistration",
+  );
+  dom.guestAccountStatus = document.getElementById("guestAccountStatus");
+
+  dom.bookingFilterForm = document.getElementById("bookingFilterForm");
+  dom.bookingFilterBookingId = document.getElementById(
+    "bookingFilterBookingId",
+  );
+  dom.bookingFilterCustId = document.getElementById("bookingFilterCustId");
+  dom.bookingFilterRoomId = document.getElementById("bookingFilterRoomId");
+  dom.bookingFilterStartDate = document.getElementById(
+    "bookingFilterStartDate",
+  );
+  dom.bookingFilterEndDate = document.getElementById("bookingFilterEndDate");
+  dom.bookingFilterRefreshBtn = document.getElementById(
+    "bookingFilterRefreshBtn",
+  );
+  dom.bookingFilterClearBtn = document.getElementById("bookingFilterClearBtn");
+  dom.bookingFilterStatus = document.getElementById("bookingFilterStatus");
+  dom.bookingFilterMeta = document.getElementById("bookingFilterMeta");
+  dom.bookingFilterResultsHead = document.getElementById(
+    "bookingFilterResultsHead",
+  );
+  dom.bookingFilterResultsBody = document.getElementById(
+    "bookingFilterResultsBody",
+  );
 
   dom.rentingForm = document.getElementById("rentingForm");
   dom.rentingBookingId = document.getElementById("rentingBookingId");
@@ -219,12 +267,22 @@ function mapDom() {
 
 function bindNavigation() {
   dom.navButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       if (btn.classList.contains("locked")) {
-        pushToast("This section requires employee role.", "warn");
+        const reason =
+          btn.dataset.lockReason ||
+          "This section is unavailable for your current session.";
+        pushToast(reason, "warn");
         return;
       }
       activatePanel(btn.dataset.navTarget, btn.id);
+      if (btn.dataset.navTarget === "section-renting") {
+        await safeRun(
+          refreshEmployeeBookings,
+          "Could not load bookings for check-in.",
+          dom.bookingFilterStatus,
+        );
+      }
     });
   });
 }
@@ -251,7 +309,11 @@ function bindApiConfig() {
     dom.apiBaseUrl.value = value;
     localStorage.setItem("ehotels_api_base_url", value);
     if (rawValue.startsWith("http://") && value.startsWith("https://")) {
-      setStatus(dom.apiStatus, "Base URL saved. Ngrok URL was auto-upgraded to HTTPS.", "ok");
+      setStatus(
+        dom.apiStatus,
+        "Base URL saved. Ngrok URL was auto-upgraded to HTTPS.",
+        "ok",
+      );
     } else {
       setStatus(dom.apiStatus, "Base URL saved.", "ok");
     }
@@ -309,6 +371,13 @@ function bindAuth() {
 
         refreshSessionBadge();
         enforceRoleVisibility();
+        if (role === "ROLE_EMPLOYEE") {
+          await safeRun(
+            refreshEmployeeBookings,
+            "Could not load bookings for check-in.",
+            dom.bookingFilterStatus,
+          );
+        }
         setStatus(dom.authStatus, "Logged in and token stored.", "ok");
         pushToast("Authentication successful.", "ok");
       },
@@ -402,7 +471,7 @@ function bindSearch() {
     } else {
       setStatus(
         dom.bookingStatus,
-        "Selected row has no detectable room ID. Fill manually.",
+        "Selected row has no detectable room ID. Select a different room.",
         "warn",
       );
     }
@@ -413,8 +482,26 @@ function bindBooking() {
   dom.bookingForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
+    if (!state.username) {
+      setStatus(
+        dom.bookingStatus,
+        "Please login first. Customer ID is taken from your session.",
+        "err",
+      );
+      return;
+    }
+
+    if (state.role !== "ROLE_CUSTOMER") {
+      setStatus(
+        dom.bookingStatus,
+        "Bookings require a customer session. Login with ROLE_CUSTOMER.",
+        "err",
+      );
+      return;
+    }
+
     const payload = {
-      custId: dom.bookingCustId.value.trim(),
+      custId: state.username.trim(),
       roomId: parseNumericOrRaw(dom.bookingRoomId.value.trim()),
       startDate: dom.bookingStartDate.value,
       endDate: dom.bookingEndDate.value,
@@ -447,18 +534,176 @@ function bindBooking() {
   });
 }
 
+function bindGuestAccount() {
+  if (!dom.guestAccountForm) {
+    return;
+  }
+
+  dom.guestAccountForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const payload = {
+      custID: dom.guestCustId.value.trim(),
+      ID_type: dom.guestIdType.value,
+      DateOfRegistration:
+        dom.guestDateOfRegistration.value ||
+        new Date().toISOString().slice(0, 10),
+      Customer_Name: dom.guestCustomerName.value.trim(),
+      Customer_Address: dom.guestCustomerAddress.value.trim(),
+    };
+
+    if (
+      !payload.custID ||
+      !payload.ID_type ||
+      !payload.DateOfRegistration ||
+      !payload.Customer_Name ||
+      !payload.Customer_Address
+    ) {
+      setStatus(
+        dom.guestAccountStatus,
+        "All account fields are required.",
+        "err",
+      );
+      return;
+    }
+
+    await safeRun(
+      async () => {
+        await apiRequest("/api/management/customers", {
+          method: "POST",
+          auth: false,
+          body: payload,
+        });
+
+        const loginResponse = await apiRequest("/api/auth/login", {
+          method: "POST",
+          auth: false,
+          body: {
+            username: payload.custID,
+            role: "ROLE_CUSTOMER",
+          },
+        });
+
+        const token = extractToken(loginResponse);
+        if (!token) {
+          throw new Error(
+            "Account created, but automatic login failed because no JWT was returned.",
+          );
+        }
+
+        state.token = token;
+        state.role = "ROLE_CUSTOMER";
+        state.username = payload.custID;
+
+        localStorage.setItem("ehotels_token", token);
+        localStorage.setItem("ehotels_role", "ROLE_CUSTOMER");
+        localStorage.setItem("ehotels_username", payload.custID);
+
+        refreshSessionBadge();
+        enforceRoleVisibility();
+        dom.bookingCustomerDisplay.value = payload.custID;
+
+        setStatus(
+          dom.guestAccountStatus,
+          "Account created and customer session started.",
+          "ok",
+        );
+        setStatus(dom.authStatus, "Logged in and token stored.", "ok");
+        pushToast("Account created. You can now book a room.", "ok");
+      },
+      "Account creation failed.",
+      dom.guestAccountStatus,
+    );
+  });
+}
+
 function bindRenting() {
+  const debouncedBookingFilter = debounce(() => {
+    applyEmployeeBookingFilters();
+  }, 250);
+
+  BOOKING_FILTER_FIELDS.forEach((fieldId) => {
+    const input = dom[fieldId];
+    if (!input) {
+      return;
+    }
+    input.addEventListener("input", debouncedBookingFilter);
+    input.addEventListener("change", debouncedBookingFilter);
+  });
+
+  if (dom.bookingFilterForm) {
+    dom.bookingFilterForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await safeRun(
+        refreshEmployeeBookings,
+        "Could not load bookings for check-in.",
+        dom.bookingFilterStatus,
+      );
+    });
+  }
+
+  if (dom.bookingFilterClearBtn) {
+    dom.bookingFilterClearBtn.addEventListener("click", () => {
+      BOOKING_FILTER_FIELDS.forEach((fieldId) => {
+        const input = dom[fieldId];
+        if (input) {
+          input.value = "";
+        }
+      });
+      applyEmployeeBookingFilters();
+      setStatus(dom.bookingFilterStatus, "Booking filters cleared.", "warn");
+    });
+  }
+
+  if (dom.bookingFilterResultsBody) {
+    dom.bookingFilterResultsBody.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-booking-row-index]");
+      if (!button) {
+        return;
+      }
+
+      const index = Number(button.dataset.bookingRowIndex);
+      const selected = state.filteredEmployeeBookings[index];
+      if (!selected) {
+        return;
+      }
+
+      dom.rentingBookingId.value = selected.bookingId || "";
+      dom.rentingCustId.value = selected.custId || "";
+      dom.rentingRoomId.value = selected.roomId || "";
+      dom.rentingCheckInDate.value = selected.startDate || "";
+      dom.rentingCheckOutDate.value = selected.endDate || "";
+
+      setStatus(
+        dom.rentingStatus,
+        `Booking ${selected.bookingId || "(no id)"} loaded into renting form.`,
+        "ok",
+      );
+      pushToast("Booking loaded into check-in form.", "ok");
+    });
+  }
+
   dom.rentingForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
+    if (state.role !== "ROLE_EMPLOYEE" || !state.username || !state.token) {
+      setStatus(
+        dom.rentingStatus,
+        "Renting and check-in require a logged-in employee session.",
+        "err",
+      );
+      return;
+    }
+
     const bookingIdRaw = dom.rentingBookingId.value.trim();
+    const roomIdRaw = dom.rentingRoomId.value.trim();
     const paymentAmount = Number(dom.rentingPaymentAmount.value);
 
     const payload = {
-      bookingId: bookingIdRaw ? Number(bookingIdRaw) : null,
+      bookingId: bookingIdRaw ? parseNumericOrRaw(bookingIdRaw) : null,
       custId: dom.rentingCustId.value.trim(),
-      roomId: Number(dom.rentingRoomId.value),
-      employeeId: dom.rentingEmployeeId.value.trim(),
+      roomId: parseNumericOrRaw(roomIdRaw),
+      employeeId: state.username.trim(),
       checkInDate: dom.rentingCheckInDate.value,
       checkOutDate: dom.rentingCheckOutDate.value,
       paymentAmount,
@@ -467,9 +712,9 @@ function bindRenting() {
     if (
       !payload.custId ||
       !payload.employeeId ||
+      !roomIdRaw ||
       !payload.checkInDate ||
       !payload.checkOutDate ||
-      Number.isNaN(payload.roomId) ||
       Number.isNaN(paymentAmount)
     ) {
       setStatus(
@@ -493,6 +738,7 @@ function bindRenting() {
         );
         pushToast("Renting/check-in executed.", "ok");
         await refreshSearchRooms();
+        await refreshEmployeeBookings();
       },
       "Renting request failed.",
       dom.rentingStatus,
@@ -746,6 +992,22 @@ function hydrateSessionFromStorage() {
   state.token = localStorage.getItem("ehotels_token") || "";
   state.role = localStorage.getItem("ehotels_role") || "";
   state.username = localStorage.getItem("ehotels_username") || "";
+
+  const hasUsername = Boolean(state.username.trim());
+  const hasToken = Boolean(state.token.trim());
+  const validRole =
+    state.role === "ROLE_CUSTOMER" || state.role === "ROLE_EMPLOYEE";
+
+  // Any partial or invalid session is treated as guest mode.
+  if (!hasUsername || !hasToken || !validRole) {
+    state.token = "";
+    state.role = "";
+    state.username = "";
+    localStorage.removeItem("ehotels_token");
+    localStorage.removeItem("ehotels_role");
+    localStorage.removeItem("ehotels_username");
+  }
+
   if (state.role) {
     dom.loginRole.value = state.role;
   }
@@ -763,27 +1025,77 @@ function refreshSessionBadge() {
     dom.sessionIdentity.textContent = "Guest mode";
     dom.sessionRole.textContent = "No role selected";
   }
+
+  if (dom.bookingCustomerDisplay) {
+    dom.bookingCustomerDisplay.value = state.username || "";
+    dom.bookingCustomerDisplay.placeholder = "Login as ROLE_CUSTOMER";
+  }
+
+  if (dom.rentingEmployeeId) {
+    dom.rentingEmployeeId.value =
+      state.role === "ROLE_EMPLOYEE" ? state.username : "";
+  }
 }
 
 function enforceRoleVisibility() {
-  const employeeOnly = ["nav-renting", "nav-management"];
-  const isEmployee = state.role === "ROLE_EMPLOYEE";
+  const hasSession = Boolean(
+    state.username.trim() && state.token.trim() && state.role,
+  );
+  const isCustomer = hasSession && state.role === "ROLE_CUSTOMER";
+  const isEmployee = hasSession && state.role === "ROLE_EMPLOYEE";
+  const isGuest = !isCustomer && !isEmployee;
 
-  employeeOnly.forEach((id) => {
-    const btn = document.getElementById(id);
-    if (btn) {
-      btn.classList.toggle("locked", !isEmployee);
-    }
-  });
+  setNavLock("nav-auth", isGuest, "Guests can only access Search and Booking.");
+  setNavLock("nav-search", false, "");
+  setNavLock(
+    "nav-renting",
+    !isEmployee,
+    isGuest
+      ? "Guests can only access Search and Booking."
+      : "This section requires employee role.",
+  );
+  setNavLock(
+    "nav-management",
+    !isEmployee,
+    isGuest
+      ? "Guests can only access Search and Booking."
+      : "This section requires employee role.",
+  );
+  setNavLock(
+    "nav-insights",
+    isGuest,
+    "Guests can only access Search and Booking.",
+  );
 
-  if (!isEmployee) {
-    const activeEmployeePanel = document.querySelector(
-      "#section-renting.active, #section-management.active",
-    );
-    if (activeEmployeePanel) {
-      activatePanel("section-search", "nav-search");
-    }
+  if (dom.bookingCard) {
+    dom.bookingCard.classList.toggle("hidden", !isCustomer);
   }
+
+  if (dom.guestAccountCard) {
+    dom.guestAccountCard.classList.toggle("hidden", !isGuest);
+  }
+
+  if (isGuest) {
+    activatePanel("section-search", "nav-search");
+    return;
+  }
+
+  const activeLockedNav = dom.navButtons.find(
+    (btn) =>
+      btn.classList.contains("active") && btn.classList.contains("locked"),
+  );
+  if (activeLockedNav) {
+    activatePanel("section-search", "nav-search");
+  }
+}
+
+function setNavLock(id, locked, reason) {
+  const btn = document.getElementById(id);
+  if (!btn) {
+    return;
+  }
+  btn.classList.toggle("locked", locked);
+  btn.dataset.lockReason = reason || "";
 }
 
 function setDefaultDates() {
@@ -801,6 +1113,9 @@ function setDefaultDates() {
   dom.searchEndDate.value = defaultEnd;
   dom.bookingStartDate.value = defaultStart;
   dom.bookingEndDate.value = defaultEnd;
+  if (dom.guestDateOfRegistration) {
+    dom.guestDateOfRegistration.value = today.toISOString().slice(0, 10);
+  }
   dom.rentingCheckInDate.value = defaultStart;
   dom.rentingCheckOutDate.value = defaultEnd;
   dom.queryStartDate.value = defaultStart;
@@ -855,6 +1170,243 @@ function collectSearchQuery() {
   });
 
   return query;
+}
+
+async function refreshEmployeeBookings() {
+  if (state.role !== "ROLE_EMPLOYEE" || !state.username || !state.token) {
+    state.employeeBookings = [];
+    state.filteredEmployeeBookings = [];
+    renderTable(dom.bookingFilterResultsHead, dom.bookingFilterResultsBody, []);
+    if (dom.bookingFilterMeta) {
+      dom.bookingFilterMeta.textContent = "Login as employee to load bookings.";
+    }
+    setStatus(
+      dom.bookingFilterStatus,
+      "Employee session required to load bookings.",
+      "warn",
+    );
+    return;
+  }
+
+  const { rows, endpoint } = await fetchEmployeeBookings();
+  state.employeeBookings = rows.map(normalizeBookingRecord).filter((item) => {
+    return (
+      item.bookingId ||
+      item.custId ||
+      item.roomId ||
+      item.startDate ||
+      item.endDate
+    );
+  });
+
+  applyEmployeeBookingFilters();
+
+  if (dom.bookingFilterMeta) {
+    dom.bookingFilterMeta.textContent = `${state.filteredEmployeeBookings.length} of ${state.employeeBookings.length} booking(s) from ${endpoint}.`;
+  }
+
+  if (!state.employeeBookings.length) {
+    setStatus(
+      dom.bookingFilterStatus,
+      "No bookings were returned by the backend.",
+      "warn",
+    );
+    return;
+  }
+
+  setStatus(
+    dom.bookingFilterStatus,
+    "Bookings loaded. Filter and click Use to auto-fill check-in.",
+    "ok",
+  );
+}
+
+async function fetchEmployeeBookings() {
+  const endpoints = [
+    "/api/management/bookings",
+    "/api/management/booking",
+    "/api/management/bookings/all",
+    "/api/management/book",
+  ];
+
+  let lastError = null;
+
+  for (const endpoint of endpoints) {
+    try {
+      const payload = await apiRequest(endpoint);
+      const rows = toArray(payload).filter((row) => {
+        return typeof row === "object" && row !== null && !Array.isArray(row);
+      });
+
+      if (Array.isArray(payload) || rows.length || payload === null) {
+        return { rows, endpoint };
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw new Error(
+    lastError instanceof Error
+      ? `Unable to fetch bookings: ${lastError.message}`
+      : "Unable to fetch bookings. Ensure a GET bookings endpoint is available.",
+  );
+}
+
+function applyEmployeeBookingFilters() {
+  const filters = collectEmployeeBookingFilters();
+  state.filteredEmployeeBookings = state.employeeBookings.filter((booking) => {
+    return bookingMatchesFilters(booking, filters);
+  });
+
+  const rowsForTable = state.filteredEmployeeBookings.map((booking) => {
+    return {
+      bookingId: booking.bookingId || "-",
+      custId: booking.custId || "-",
+      roomId: booking.roomId || "-",
+      startDate: booking.startDate || "-",
+      endDate: booking.endDate || "-",
+    };
+  });
+
+  renderTable(
+    dom.bookingFilterResultsHead,
+    dom.bookingFilterResultsBody,
+    rowsForTable,
+    {
+      actionLabel: "Use",
+      actionAttribute: "data-booking-row-index",
+    },
+  );
+
+  if (dom.bookingFilterMeta) {
+    dom.bookingFilterMeta.textContent = `${state.filteredEmployeeBookings.length} of ${state.employeeBookings.length} booking(s).`;
+  }
+
+  if (state.employeeBookings.length && !state.filteredEmployeeBookings.length) {
+    setStatus(
+      dom.bookingFilterStatus,
+      "No bookings match current filters.",
+      "warn",
+    );
+  }
+}
+
+function collectEmployeeBookingFilters() {
+  return {
+    bookingId: dom.bookingFilterBookingId?.value.trim().toLowerCase() || "",
+    custId: dom.bookingFilterCustId?.value.trim().toLowerCase() || "",
+    roomId: dom.bookingFilterRoomId?.value.trim().toLowerCase() || "",
+    startDate: dom.bookingFilterStartDate?.value || "",
+    endDate: dom.bookingFilterEndDate?.value || "",
+  };
+}
+
+function bookingMatchesFilters(booking, filters) {
+  if (
+    filters.bookingId &&
+    !String(booking.bookingId || "")
+      .toLowerCase()
+      .includes(filters.bookingId)
+  ) {
+    return false;
+  }
+
+  if (
+    filters.custId &&
+    !String(booking.custId || "")
+      .toLowerCase()
+      .includes(filters.custId)
+  ) {
+    return false;
+  }
+
+  if (
+    filters.roomId &&
+    !String(booking.roomId || "")
+      .toLowerCase()
+      .includes(filters.roomId)
+  ) {
+    return false;
+  }
+
+  if (filters.startDate) {
+    if (!booking.endDate || booking.endDate < filters.startDate) {
+      return false;
+    }
+  }
+
+  if (filters.endDate) {
+    if (!booking.startDate || booking.startDate > filters.endDate) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function normalizeBookingRecord(row) {
+  return {
+    bookingId: readCandidateValue(row, [
+      "bookingId",
+      "bookingID",
+      "Booking_ID",
+      "booking_id",
+      "id",
+    ]),
+    custId: readCandidateValue(row, [
+      "custId",
+      "custID",
+      "customerId",
+      "customerID",
+      "Customer_ID",
+      "customer_id",
+    ]),
+    roomId: readCandidateValue(row, ["roomId", "roomID", "Room_ID", "room_id"]),
+    startDate: normalizeDateValue(
+      readCandidateValue(row, [
+        "startDate",
+        "checkInDate",
+        "checkinDate",
+        "fromDate",
+        "start_date",
+        "check_in_date",
+      ]),
+    ),
+    endDate: normalizeDateValue(
+      readCandidateValue(row, [
+        "endDate",
+        "checkOutDate",
+        "checkoutDate",
+        "toDate",
+        "end_date",
+        "check_out_date",
+      ]),
+    ),
+    raw: row,
+  };
+}
+
+function readCandidateValue(source, candidates) {
+  for (const key of candidates) {
+    const value = source[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return value;
+    }
+  }
+  return "";
+}
+
+function normalizeDateValue(value) {
+  if (value === undefined || value === null || value === "") {
+    return "";
+  }
+
+  const raw = String(value).trim();
+  if (raw.length >= 10) {
+    return raw.slice(0, 10);
+  }
+  return raw;
 }
 
 async function refreshEntityRows() {
@@ -1151,7 +1703,10 @@ function normalizeBaseUrl(rawUrl) {
 }
 
 function isNgrokHost(hostname) {
-  return /(^|\.)ngrok(-free)?\.app$/i.test(hostname) || /(^|\.)ngrok\.io$/i.test(hostname);
+  return (
+    /(^|\.)ngrok(-free)?\.app$/i.test(hostname) ||
+    /(^|\.)ngrok\.io$/i.test(hostname)
+  );
 }
 
 function inferIdFromRow(row, candidates) {

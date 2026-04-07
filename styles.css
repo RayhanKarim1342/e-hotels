@@ -203,6 +203,10 @@ h1 {
   display: grid;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .panel-head {
   border: 1px solid var(--line);
   border-radius: var(--radius);
