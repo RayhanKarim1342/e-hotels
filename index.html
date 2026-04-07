@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>E-Hotels Control Deck</title>
+    <title>E-Hotels</title>
     <meta
       name="description"
       content="Room discovery, booking, renting, and management console for the E-Hotels project."
@@ -352,7 +352,7 @@
           <article class="card">
             <h3>Find Existing Bookings</h3>
             <p class="helper">
-              Filter bookings, then click Use to auto-fill renting fields.
+              Filter bookings, then click Fill Form to auto-fill renting fields.
             </p>
             <form id="bookingFilterForm" class="form-grid search-grid">
               <label class="field">
@@ -466,14 +466,33 @@
             </form>
             <p id="rentingStatus" class="status"></p>
           </article>
+
+          <article class="card">
+            <div class="card-header-line">
+              <h3>Available Rentings</h3>
+              <p id="rentingListMeta" class="meta">No query yet.</p>
+            </div>
+            <div class="actions">
+              <button id="refreshRentingsBtn" type="button" class="ghost">
+                Refresh Rentings
+              </button>
+            </div>
+            <p id="rentingListStatus" class="status"></p>
+            <div class="table-wrap">
+              <table>
+                <thead id="rentingResultsHead"></thead>
+                <tbody id="rentingResultsBody"></tbody>
+              </table>
+            </div>
+          </article>
         </section>
 
         <section id="section-management" class="panel">
           <div class="panel-head">
-            <h2>Employee Management Portal</h2>
+            <h2>Employee</h2>
             <p>
-              Insert, update, delete, and inspect Customers, Employees, Hotels,
-              and Rooms.
+              Manage Customers, Employees, Hotels, and Rooms from a list with
+              simple form controls.
             </p>
           </div>
 
@@ -486,7 +505,6 @@
                   <option value="employees">Employees</option>
                   <option value="hotels">Hotels</option>
                   <option value="rooms">Rooms</option>
-                  <option value="bookings">Bookings</option>
                 </select>
               </label>
               <button id="entityRefreshBtn" type="button" class="ghost">
@@ -494,72 +512,53 @@
               </button>
             </div>
             <p class="helper">
-              Use templates as starting point; payload keys can be adjusted to
-              match your backend DTOs.
+              Click a row from the list to load it into the editor, then update
+              or delete it. Use New Record to clear the form for insertion.
             </p>
             <p id="managementStatus" class="status"></p>
           </article>
 
-          <div class="card-grid two">
+          <div class="card-grid two management-grid">
             <article class="card">
-              <h3>Create Record</h3>
-              <form id="createForm" class="form-grid">
-                <label class="field">
-                  <span>Create Payload (JSON)</span>
-                  <textarea
-                    id="createPayload"
-                    rows="10"
-                    spellcheck="false"
-                  ></textarea>
-                </label>
-                <div class="actions">
-                  <button type="submit">Insert</button>
-                </div>
-              </form>
+              <div class="card-header-line">
+                <h3>Entity Records</h3>
+                <p id="entityMeta" class="meta"></p>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead id="entityTableHead"></thead>
+                  <tbody id="entityTableBody"></tbody>
+                </table>
+              </div>
             </article>
 
             <article class="card">
-              <h3>Update or Delete</h3>
-              <form id="updateForm" class="form-grid">
-                <label class="field">
-                  <span>Record ID</span>
-                  <input
-                    id="recordId"
-                    type="text"
-                    placeholder="Entity-specific ID"
-                    required
-                  />
-                </label>
-                <label class="field">
-                  <span>Update Payload (JSON)</span>
-                  <textarea
-                    id="updatePayload"
-                    rows="8"
-                    spellcheck="false"
-                  ></textarea>
-                </label>
-                <div class="actions">
-                  <button type="submit">Update</button>
-                  <button id="deleteBtn" type="button" class="danger">
+              <div class="card-header-line">
+                <h3>Record Editor</h3>
+                <p id="managementSelectionMeta" class="meta">
+                  New record mode.
+                </p>
+              </div>
+              <form id="entityEditorForm" class="form-grid">
+                <div
+                  id="entityFormFields"
+                  class="form-grid management-fields"
+                ></div>
+                <div class="actions wide">
+                  <button id="entityNewBtn" type="button" class="ghost">
+                    Clear Form
+                  </button>
+                  <button id="entityCreateBtn" type="submit">Add</button>
+                  <button id="entityUpdateBtn" type="button" class="ghost">
+                    Update
+                  </button>
+                  <button id="entityDeleteBtn" type="button" class="danger">
                     Delete
                   </button>
                 </div>
               </form>
             </article>
           </div>
-
-          <article class="card">
-            <div class="card-header-line">
-              <h3>Entity Records</h3>
-              <p id="entityMeta" class="meta"></p>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead id="entityTableHead"></thead>
-                <tbody id="entityTableBody"></tbody>
-              </table>
-            </div>
-          </article>
         </section>
 
         <section id="section-insights" class="panel">
@@ -574,9 +573,7 @@
           <article class="card">
             <h3>Views</h3>
             <div class="actions">
-              <button id="refreshViewsBtn" type="button">
-                Refresh Required Views
-              </button>
+              <button id="refreshViewsBtn" type="button">Refresh Views</button>
             </div>
             <p id="insightsStatus" class="status"></p>
 
@@ -593,35 +590,7 @@
           </article>
 
           <article class="card">
-            <h3>Additional Queries</h3>
-            <div class="actions">
-              <button id="refreshQueriesBtn" type="button" class="ghost">
-                Refresh All Query Endpoints
-              </button>
-            </div>
-
-            <form id="queryAvailableRoomsForm" class="form-grid three">
-              <label class="field">
-                <span>Hotel ID</span>
-                <input
-                  id="queryHotelId"
-                  type="number"
-                  min="1"
-                  placeholder="1"
-                />
-              </label>
-              <label class="field">
-                <span>Start Date</span>
-                <input id="queryStartDate" type="date" />
-              </label>
-              <label class="field">
-                <span>End Date</span>
-                <input id="queryEndDate" type="date" />
-              </label>
-              <div class="actions wide">
-                <button type="submit">Run Available Rooms Query</button>
-              </div>
-            </form>
+            <h3>Additional Data</h3>
 
             <div class="insight-grid">
               <section>

@@ -322,6 +322,13 @@ button:hover {
   filter: brightness(1.04);
 }
 
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+}
+
 button.ghost {
   background: #f7f2e9;
   color: var(--ink);
@@ -438,9 +445,37 @@ tbody tr:hover {
   font-size: 0.75rem;
 }
 
+.management-grid {
+  align-items: start;
+}
+
+.management-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.entity-record-row {
+  cursor: pointer;
+}
+
+.entity-record-row.selected {
+  background: rgba(22, 107, 99, 0.2) !important;
+}
+
 .dataset {
   padding: 0.75rem;
   min-height: 90px;
+  overflow: auto;
+}
+
+.dataset table {
+  width: 100%;
+  min-width: 420px;
+  border-collapse: collapse;
+}
+
+.dataset th,
+.dataset td {
+  word-break: break-word;
 }
 
 .dataset.empty {
@@ -550,6 +585,10 @@ tbody tr:hover {
   .form-grid.three {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .management-fields {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
@@ -571,6 +610,10 @@ tbody tr:hover {
   .insight-grid,
   .form-grid.search-grid,
   .form-grid.three {
+    grid-template-columns: 1fr;
+  }
+
+  .management-fields {
     grid-template-columns: 1fr;
   }
 

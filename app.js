@@ -7,8 +7,10 @@ const state = {
   selectedRoom: null,
   employeeBookings: [],
   filteredEmployeeBookings: [],
+  employeeRentings: [],
   activeEntity: "customers",
   entityRows: [],
+  selectedEntityRowIndex: null,
 };
 
 const ENTITY_CONFIG = {
@@ -34,7 +36,7 @@ const ENTITY_CONFIG = {
   employees: {
     label: "Employees",
     path: "/api/management/employees",
-    idName: "nationalID",
+    idName: "manager_national_id",
     idCandidates: [
       "National_ID",
       "nationalID",
@@ -57,47 +59,99 @@ const ENTITY_CONFIG = {
   hotels: {
     label: "Hotels",
     path: "/api/management/hotels",
-    idName: "hotelID",
-    idCandidates: ["hotelID", "hotelId", "Hotel_ID", "id"],
+    idName: "hotel_id",
+    idCandidates: ["hotel_id", "hotelID", "hotelId", "Hotel_ID", "id"],
+    fieldAliases: {
+      hotel_id: ["hotel_id", "hotelID", "hotelId", "Hotel_ID", "id"],
+      chainid: ["chainid", "chainID", "chainId", "Chain_ID", "chain_id"],
+      email: ["email", "Email", "Hotel_Email", "hotelEmail", "hotel_email"],
+      hotel_address: [
+        "hotel_address",
+        "hotelAddress",
+        "Hotel_Address",
+        "address",
+        "Address",
+      ],
+      rating: [
+        "rating",
+        "Rating",
+        "stars",
+        "categoryRating",
+        "category_rating",
+      ],
+      manager_national_id: [
+        "manager_national_id",
+        "managerNationalId",
+        "Manager_National_ID",
+        "manager_nationalid",
+      ],
+    },
     createTemplate: {
-      hotelID: 101,
-      chainID: 1,
-      Hotel_Name: "Downtown Grand",
-      Category_Rating: 4,
-      Total_Rooms: 180,
-      Address: "12 Market Street, Toronto",
+      hotel_id: 101,
+      chainid: 1,
+      email: "info@downtown-grand.example",
+      hotel_address: "12 Market Street, Toronto",
+      rating: 4,
+      manager_national_id: "987-654-321",
     },
     updateTemplate: {
-      chainID: 1,
-      Hotel_Name: "Downtown Grand",
-      Category_Rating: 4,
-      Total_Rooms: 180,
-      Address: "12 Market Street, Toronto",
+      chainid: 1,
+      email: "info@downtown-grand.example",
+      hotel_address: "12 Market Street, Toronto",
+      rating: 4,
+      manager_national_id: "987-654-321",
     },
   },
   rooms: {
     label: "Rooms",
     path: "/api/management/rooms",
-    idName: "roomID",
-    idCandidates: ["roomID", "roomId", "Room_ID", "id"],
+    idName: "roomid",
+    idCandidates: ["roomid", "roomID", "roomId", "Room_ID", "id"],
+    fieldAliases: {
+      roomid: ["roomid", "roomID", "roomId", "Room_ID", "room_id", "id"],
+      hotel_id: ["hotel_id", "hotelID", "hotelId", "Hotel_ID", "hotel_id"],
+      roomnumber: ["roomnumber", "roomNumber", "room_number", "number"],
+      price: ["price", "Price", "roomPrice", "room_price", "cost", "rate"],
+      room_status: ["room_status", "roomStatus", "Room_Status", "status"],
+      extendable: [
+        "extendable",
+        "Extendable",
+        "isExtendable",
+        "is_extendable",
+        "extendableFlag",
+      ],
+      room_view: ["room_view", "roomView", "Room_View", "view", "view_type"],
+      capacity: ["capacity", "Capacity", "roomCapacity", "room_capacity"],
+      problems_damages: [
+        "problems_damages",
+        "problemsDamages",
+        "Problems_Damages",
+        "problems",
+        "damages",
+        "issues",
+        "description",
+      ],
+    },
     createTemplate: {
-      roomID: 1,
-      hotelID: 101,
-      Price: 249.99,
-      Capacity: 2,
-      Amenities: "TV, WiFi, AC",
-      View_Type: "sea",
-      Extendable: true,
-      Problems_Damages: null,
+      roomid: 1,
+      hotel_id: 101,
+      roomnumber: 101,
+      price: 249.99,
+      room_status: "available",
+      extendable: true,
+      room_view: "sea",
+      capacity: 2,
+      problems_damages: null,
     },
     updateTemplate: {
-      hotelID: 101,
-      Price: 249.99,
-      Capacity: 2,
-      Amenities: "TV, WiFi, AC",
-      View_Type: "sea",
-      Extendable: true,
-      Problems_Damages: null,
+      hotel_id: 101,
+      roomnumber: 101,
+      price: 249.99,
+      room_status: "available",
+      extendable: true,
+      room_view: "sea",
+      capacity: 2,
+      problems_damages: null,
     },
   },
   bookings: {
@@ -126,7 +180,7 @@ const SEARCH_FIELDS = [
   "capacity",
   "area",
   "chainName",
-  "categoryRating",
+  "rating",
   "minTotalRooms",
   "maxPrice",
 ];
@@ -155,11 +209,12 @@ async function init() {
   bindManagement();
   bindInsights();
 
-  await hydrateApiBaseUrl();
   hydrateSessionFromStorage();
   setDefaultDates();
   populateEntityTemplates();
   enforceRoleVisibility();
+
+  await hydrateApiBaseUrl();
 
   await safeRun(refreshSearchRooms, "Search is ready.");
   await safeRun(refreshEntityRows, "Management list initialized.");
@@ -190,6 +245,8 @@ function mapDom() {
   dom.searchClearBtn = document.getElementById("searchClearBtn");
   dom.searchStatus = document.getElementById("searchStatus");
   dom.searchMeta = document.getElementById("searchMeta");
+  dom.searchStartDate = document.getElementById("searchStartDate");
+  dom.searchEndDate = document.getElementById("searchEndDate");
   dom.searchResultsHead = document.getElementById("searchResultsHead");
   dom.searchResultsBody = document.getElementById("searchResultsBody");
 
@@ -246,22 +303,29 @@ function mapDom() {
   dom.rentingCheckOutDate = document.getElementById("rentingCheckOutDate");
   dom.rentingPaymentAmount = document.getElementById("rentingPaymentAmount");
   dom.rentingStatus = document.getElementById("rentingStatus");
+  dom.refreshRentingsBtn = document.getElementById("refreshRentingsBtn");
+  dom.rentingListStatus = document.getElementById("rentingListStatus");
+  dom.rentingListMeta = document.getElementById("rentingListMeta");
+  dom.rentingResultsHead = document.getElementById("rentingResultsHead");
+  dom.rentingResultsBody = document.getElementById("rentingResultsBody");
 
   dom.entitySelect = document.getElementById("entitySelect");
   dom.entityRefreshBtn = document.getElementById("entityRefreshBtn");
-  dom.createForm = document.getElementById("createForm");
-  dom.createPayload = document.getElementById("createPayload");
-  dom.updateForm = document.getElementById("updateForm");
-  dom.recordId = document.getElementById("recordId");
-  dom.updatePayload = document.getElementById("updatePayload");
-  dom.deleteBtn = document.getElementById("deleteBtn");
+  dom.entityEditorForm = document.getElementById("entityEditorForm");
+  dom.entityFormFields = document.getElementById("entityFormFields");
+  dom.entityNewBtn = document.getElementById("entityNewBtn");
+  dom.entityCreateBtn = document.getElementById("entityCreateBtn");
+  dom.entityUpdateBtn = document.getElementById("entityUpdateBtn");
+  dom.entityDeleteBtn = document.getElementById("entityDeleteBtn");
+  dom.managementSelectionMeta = document.getElementById(
+    "managementSelectionMeta",
+  );
   dom.managementStatus = document.getElementById("managementStatus");
   dom.entityMeta = document.getElementById("entityMeta");
   dom.entityTableHead = document.getElementById("entityTableHead");
   dom.entityTableBody = document.getElementById("entityTableBody");
 
   dom.refreshViewsBtn = document.getElementById("refreshViewsBtn");
-  dom.refreshQueriesBtn = document.getElementById("refreshQueriesBtn");
   dom.insightsStatus = document.getElementById("insightsStatus");
   dom.viewAvailableRoomsPerArea = document.getElementById(
     "viewAvailableRoomsPerArea",
@@ -273,12 +337,6 @@ function mapDom() {
   dom.queryTopRatedHotels = document.getElementById("queryTopRatedHotels");
   dom.queryHotelStats = document.getElementById("queryHotelStats");
   dom.queryAvailableRooms = document.getElementById("queryAvailableRooms");
-  dom.queryAvailableRoomsForm = document.getElementById(
-    "queryAvailableRoomsForm",
-  );
-  dom.queryHotelId = document.getElementById("queryHotelId");
-  dom.queryStartDate = document.getElementById("queryStartDate");
-  dom.queryEndDate = document.getElementById("queryEndDate");
 
   dom.toastHost = document.getElementById("toastHost");
 }
@@ -299,6 +357,23 @@ function bindNavigation() {
           refreshEmployeeBookings,
           "Could not load bookings for check-in.",
           dom.bookingFilterStatus,
+        );
+        await safeRun(
+          refreshEmployeeRentings,
+          "Could not load rentings.",
+          dom.rentingListStatus,
+        );
+      }
+      if (btn.dataset.navTarget === "section-insights") {
+        await safeRun(
+          refreshRequiredViews,
+          "Could not refresh required SQL views.",
+          dom.insightsStatus,
+        );
+        await safeRun(
+          refreshExtraQueries,
+          "Could not refresh query endpoints.",
+          dom.insightsStatus,
         );
       }
     });
@@ -394,6 +469,11 @@ function bindAuth() {
             refreshEmployeeBookings,
             "Could not load bookings for check-in.",
             dom.bookingFilterStatus,
+          );
+          await safeRun(
+            refreshEmployeeRentings,
+            "Could not load rentings.",
+            dom.rentingListStatus,
           );
         }
         setStatus(dom.authStatus, "Logged in and token stored.", "ok");
@@ -636,6 +716,16 @@ function bindGuestAccount() {
 }
 
 function bindRenting() {
+  if (dom.refreshRentingsBtn) {
+    dom.refreshRentingsBtn.addEventListener("click", async () => {
+      await safeRun(
+        refreshEmployeeRentings,
+        "Could not load rentings.",
+        dom.rentingListStatus,
+      );
+    });
+  }
+
   const debouncedBookingFilter = debounce(() => {
     applyEmployeeBookingFilters();
   }, 250);
@@ -757,6 +847,7 @@ function bindRenting() {
         pushToast("Renting/check-in executed.", "ok");
         await refreshSearchRooms();
         await refreshEmployeeBookings();
+        await refreshEmployeeRentings();
       },
       "Renting request failed.",
       dom.rentingStatus,
@@ -765,8 +856,13 @@ function bindRenting() {
 }
 
 function bindManagement() {
+  if (!dom.entityEditorForm || !dom.entityFormFields) {
+    return;
+  }
+
   dom.entitySelect.addEventListener("change", async () => {
     state.activeEntity = dom.entitySelect.value;
+    clearEntitySelection();
     populateEntityTemplates();
     await safeRun(
       refreshEntityRows,
@@ -783,15 +879,19 @@ function bindManagement() {
     );
   });
 
-  dom.createForm.addEventListener("submit", async (event) => {
+  dom.entityNewBtn.addEventListener("click", () => {
+    clearEntitySelection();
+    clearEntityEditorForm();
+    setManagementSelectionMeta("Form cleared.");
+    setStatus(dom.managementStatus, "Editor form cleared.", "ok");
+  });
+
+  dom.entityEditorForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     await safeRun(
       async () => {
         const config = ENTITY_CONFIG[state.activeEntity];
-        const payload = parseJsonInput(
-          dom.createPayload.value,
-          "create payload",
-        );
+        const payload = collectEntityEditorPayload();
         const result = await apiRequest(config.path, {
           method: "POST",
           body: payload,
@@ -802,6 +902,8 @@ function bindManagement() {
           "ok",
         );
         pushToast(`${config.label} inserted.`, "ok");
+        clearEntitySelection();
+        populateEntityTemplates();
         await refreshEntityRows();
       },
       "Insert failed.",
@@ -809,19 +911,17 @@ function bindManagement() {
     );
   });
 
-  dom.updateForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
+  dom.entityUpdateBtn.addEventListener("click", async () => {
     await safeRun(
       async () => {
         const config = ENTITY_CONFIG[state.activeEntity];
-        const id = dom.recordId.value.trim();
+        const payload = collectEntityEditorPayload();
+        const id = resolveEntityIdForMutation(payload, config);
         if (!id) {
-          throw new Error("Record ID is required for update.");
+          throw new Error(
+            "Select a record first or provide a valid record ID.",
+          );
         }
-        const payload = parseJsonInput(
-          dom.updatePayload.value,
-          "update payload",
-        );
         const result = await apiRequest(
           `${config.path}/${encodeURIComponent(id)}`,
           {
@@ -835,6 +935,8 @@ function bindManagement() {
           "ok",
         );
         pushToast(`${config.label} updated.`, "ok");
+        clearEntitySelection();
+        populateEntityTemplates();
         await refreshEntityRows();
       },
       "Update failed.",
@@ -842,13 +944,16 @@ function bindManagement() {
     );
   });
 
-  dom.deleteBtn.addEventListener("click", async () => {
+  dom.entityDeleteBtn.addEventListener("click", async () => {
     await safeRun(
       async () => {
         const config = ENTITY_CONFIG[state.activeEntity];
-        const id = dom.recordId.value.trim();
+        const payload = collectEntityEditorPayload();
+        const id = resolveEntityIdForMutation(payload, config);
         if (!id) {
-          throw new Error("Record ID is required for delete.");
+          throw new Error(
+            "Select a record first or provide a valid record ID.",
+          );
         }
         const confirmed = window.confirm(
           `Delete ${config.label} record ${id}?`,
@@ -868,6 +973,8 @@ function bindManagement() {
           "ok",
         );
         pushToast(`${config.label} deleted.`, "ok");
+        clearEntitySelection();
+        populateEntityTemplates();
         await refreshEntityRows();
       },
       "Delete failed.",
@@ -876,53 +983,18 @@ function bindManagement() {
   });
 
   dom.entityTableBody.addEventListener("click", (event) => {
-    const loadBtn = event.target.closest("button[data-load-row]");
-    if (loadBtn) {
-      const rowIndex = Number(loadBtn.dataset.loadRow);
-      const row = state.entityRows[rowIndex];
-      if (!row) {
-        return;
-      }
-      const config = ENTITY_CONFIG[state.activeEntity];
-      const id = inferIdFromRow(row, config.idCandidates);
-      if (id === undefined || id === null) {
-        setStatus(
-          dom.managementStatus,
-          "Could not infer record ID from selected row.",
-          "warn",
-        );
-        return;
-      }
-      dom.recordId.value = String(id);
-      dom.updatePayload.value = JSON.stringify(row, null, 2);
-      setStatus(
-        dom.managementStatus,
-        `Loaded row with ID ${id} into update form.`,
-        "ok",
-      );
+    const rowElement = event.target.closest("tr[data-entity-row-index]");
+    if (!rowElement) {
       return;
     }
 
-    const deleteBtn = event.target.closest("button[data-delete-row]");
-    if (deleteBtn) {
-      const rowIndex = Number(deleteBtn.dataset.deleteRow);
-      const row = state.entityRows[rowIndex];
-      if (!row) {
-        return;
-      }
-      const config = ENTITY_CONFIG[state.activeEntity];
-      const id = inferIdFromRow(row, config.idCandidates);
-      if (id === undefined || id === null) {
-        setStatus(
-          dom.managementStatus,
-          "Could not infer record ID from selected row.",
-          "warn",
-        );
-        return;
-      }
-      dom.recordId.value = String(id);
-      dom.deleteBtn.click();
+    const rowIndex = Number(rowElement.dataset.entityRowIndex);
+    const row = state.entityRows[rowIndex];
+    if (!row) {
+      return;
     }
+
+    selectEntityRow(row, rowIndex);
   });
 }
 
@@ -931,34 +1003,6 @@ function bindInsights() {
     await safeRun(
       refreshRequiredViews,
       "Could not refresh required SQL views.",
-      dom.insightsStatus,
-    );
-  });
-
-  dom.refreshQueriesBtn.addEventListener("click", async () => {
-    await safeRun(
-      refreshExtraQueries,
-      "Could not refresh query endpoints.",
-      dom.insightsStatus,
-    );
-  });
-
-  dom.queryAvailableRoomsForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    await safeRun(
-      async () => {
-        const query = {
-          hotelId: dom.queryHotelId.value.trim() || undefined,
-          startDate: dom.queryStartDate.value || undefined,
-          endDate: dom.queryEndDate.value || undefined,
-        };
-        const payload = await apiRequest("/api/queries/available-rooms", {
-          query,
-        });
-        renderDataset(dom.queryAvailableRooms, payload, "No rows returned.");
-        setStatus(dom.insightsStatus, "Available rooms query executed.", "ok");
-      },
-      "Available rooms query failed.",
       dom.insightsStatus,
     );
   });
@@ -1007,31 +1051,16 @@ async function hydrateApiBaseUrl() {
 }
 
 function hydrateSessionFromStorage() {
-  state.token = localStorage.getItem("ehotels_token") || "";
-  state.role = localStorage.getItem("ehotels_role") || "";
-  state.username = localStorage.getItem("ehotels_username") || "";
+  // Always start a fresh page load in guest mode.
+  state.token = "";
+  state.role = "";
+  state.username = "";
+  localStorage.removeItem("ehotels_token");
+  localStorage.removeItem("ehotels_role");
+  localStorage.removeItem("ehotels_username");
 
-  const hasUsername = Boolean(state.username.trim());
-  const hasToken = Boolean(state.token.trim());
-  const validRole =
-    state.role === "ROLE_CUSTOMER" || state.role === "ROLE_EMPLOYEE";
-
-  // Any partial or invalid session is treated as guest mode.
-  if (!hasUsername || !hasToken || !validRole) {
-    state.token = "";
-    state.role = "";
-    state.username = "";
-    localStorage.removeItem("ehotels_token");
-    localStorage.removeItem("ehotels_role");
-    localStorage.removeItem("ehotels_username");
-  }
-
-  if (state.role) {
-    dom.loginRole.value = state.role;
-  }
-  if (state.username) {
-    dom.loginUsername.value = state.username;
-  }
+  dom.loginRole.value = "ROLE_CUSTOMER";
+  dom.loginUsername.value = "";
   refreshSessionBadge();
 }
 
@@ -1062,28 +1091,21 @@ function enforceRoleVisibility() {
   const isCustomer = hasSession && state.role === "ROLE_CUSTOMER";
   const isEmployee = hasSession && state.role === "ROLE_EMPLOYEE";
   const isGuest = !isCustomer && !isEmployee;
+  const guestLockReason = "Guests can access API/Login and Search/Booking.";
 
-  setNavLock("nav-auth", isGuest, "Guests can only access Search and Booking.");
+  setNavLock("nav-auth", false, "");
   setNavLock("nav-search", false, "");
   setNavLock(
     "nav-renting",
     !isEmployee,
-    isGuest
-      ? "Guests can only access Search and Booking."
-      : "This section requires employee role.",
+    isGuest ? guestLockReason : "This section requires employee role.",
   );
   setNavLock(
     "nav-management",
     !isEmployee,
-    isGuest
-      ? "Guests can only access Search and Booking."
-      : "This section requires employee role.",
+    isGuest ? guestLockReason : "This section requires employee role.",
   );
-  setNavLock(
-    "nav-insights",
-    isGuest,
-    "Guests can only access Search and Booking.",
-  );
+  setNavLock("nav-insights", isGuest, guestLockReason);
 
   if (dom.bookingCard) {
     dom.bookingCard.classList.toggle("hidden", !isCustomer);
@@ -1091,11 +1113,6 @@ function enforceRoleVisibility() {
 
   if (dom.guestAccountCard) {
     dom.guestAccountCard.classList.toggle("hidden", !isGuest);
-  }
-
-  if (isGuest) {
-    activatePanel("section-search", "nav-search");
-    return;
   }
 
   const activeLockedNav = dom.navButtons.find(
@@ -1136,15 +1153,485 @@ function setDefaultDates() {
   }
   dom.rentingCheckInDate.value = defaultStart;
   dom.rentingCheckOutDate.value = defaultEnd;
-  dom.queryStartDate.value = defaultStart;
-  dom.queryEndDate.value = defaultEnd;
 }
 
 function populateEntityTemplates() {
   const config = ENTITY_CONFIG[state.activeEntity];
-  dom.createPayload.value = JSON.stringify(config.createTemplate, null, 2);
-  dom.updatePayload.value = JSON.stringify(config.updateTemplate, null, 2);
-  dom.recordId.placeholder = config.idName;
+  const template = { ...(config.createTemplate || {}) };
+
+  const hasConfiguredIdKey = Object.keys(template).some((key) =>
+    config.idCandidates.includes(key),
+  );
+
+  if (!hasConfiguredIdKey && template[config.idName] === undefined) {
+    template[config.idName] = "";
+  }
+
+  renderEntityEditor(template);
+  setManagementSelectionMeta("New record mode.");
+  updateEntityActionStates();
+}
+
+function clearEntitySelection() {
+  state.selectedEntityRowIndex = null;
+  renderEntityRowsTable(state.entityRows);
+  updateEntityActionStates();
+  setManagementSelectionMeta("New record mode.");
+}
+
+function selectEntityRow(row, rowIndex) {
+  const config = ENTITY_CONFIG[state.activeEntity];
+  const flattened = flattenObjectRow(row);
+
+  state.selectedEntityRowIndex = rowIndex;
+  renderEntityEditor(flattened);
+  renderEntityRowsTable(state.entityRows);
+  updateEntityActionStates();
+
+  const idForMessage = resolveEntityIdForMutation(flattened, config);
+  if (idForMessage) {
+    setManagementSelectionMeta(
+      `Editing ${singularEntityLabel(config.label)} ${idForMessage}.`,
+    );
+  } else {
+    setManagementSelectionMeta("Editing selected record.");
+  }
+
+  setStatus(dom.managementStatus, "Selected row loaded into editor.", "ok");
+}
+
+function renderEntityEditor(source) {
+  if (!dom.entityFormFields) {
+    return;
+  }
+
+  const config = ENTITY_CONFIG[state.activeEntity];
+  const flattened = flattenObjectRow(source);
+  const template = config.createTemplate || {};
+  const fieldSpecs = buildEntityFieldSpecs(config, template, flattened);
+
+  dom.entityFormFields.innerHTML = "";
+
+  fieldSpecs.forEach((fieldSpec) => {
+    const key = fieldSpec.key;
+    const currentValue = fieldSpec.currentValue;
+    const valueType = inferEntityFieldType(
+      key,
+      currentValue,
+      fieldSpec.templateValue,
+    );
+
+    const label = document.createElement("label");
+    label.className = "field";
+
+    const title = document.createElement("span");
+    title.textContent = humanizeKey(key);
+    label.appendChild(title);
+
+    if (valueType === "boolean") {
+      const select = document.createElement("select");
+      select.dataset.entityField = key;
+      select.dataset.entityValueType = valueType;
+
+      const emptyOption = document.createElement("option");
+      emptyOption.value = "";
+      emptyOption.textContent = "Select";
+      select.appendChild(emptyOption);
+
+      const trueOption = document.createElement("option");
+      trueOption.value = "true";
+      trueOption.textContent = "True";
+      select.appendChild(trueOption);
+
+      const falseOption = document.createElement("option");
+      falseOption.value = "false";
+      falseOption.textContent = "False";
+      select.appendChild(falseOption);
+
+      const booleanValue = coerceBooleanLikeValue(currentValue);
+      if (booleanValue !== null) {
+        select.value = String(booleanValue);
+      } else {
+        select.value = "";
+      }
+      label.appendChild(select);
+    } else {
+      const input = document.createElement("input");
+      input.dataset.entityField = key;
+      input.dataset.entityValueType = valueType;
+      input.type = valueType === "number" ? "number" : valueType;
+      if (valueType === "number") {
+        input.step = "any";
+      }
+
+      if (currentValue !== undefined && currentValue !== null) {
+        if (valueType === "date") {
+          input.value = normalizeDateValue(currentValue);
+        } else {
+          input.value = String(currentValue);
+        }
+      } else {
+        input.value = "";
+      }
+
+      label.appendChild(input);
+    }
+
+    dom.entityFormFields.appendChild(label);
+  });
+}
+
+function buildEntityFieldSpecs(config, template, flattened) {
+  const templateCanonicals = new Map();
+  const rowCanonicals = new Map();
+
+  const indexAlias = (map, key) => {
+    const canonical = getCanonicalEntityFieldKey(key);
+    if (!canonical) {
+      return;
+    }
+
+    const aliases = map.get(canonical) || [];
+    if (!aliases.includes(key)) {
+      aliases.push(key);
+    }
+    map.set(canonical, aliases);
+  };
+
+  Object.keys(template || {}).forEach((key) =>
+    indexAlias(templateCanonicals, key),
+  );
+  Object.keys(flattened || {}).forEach((key) => indexAlias(rowCanonicals, key));
+
+  const orderedCanonicals = [];
+  const seenCanonicals = new Set();
+  const registerCanonical = (canonical) => {
+    if (!canonical || seenCanonicals.has(canonical)) {
+      return;
+    }
+    seenCanonicals.add(canonical);
+    orderedCanonicals.push(canonical);
+  };
+
+  templateCanonicals.forEach((_, canonical) => registerCanonical(canonical));
+
+  const canonicalIdCandidates = config.idCandidates
+    .map((candidate) => getCanonicalEntityFieldKey(candidate))
+    .filter(Boolean);
+  const hasConfiguredIdKey = canonicalIdCandidates.some((candidate) =>
+    seenCanonicals.has(candidate),
+  );
+
+  if (!hasConfiguredIdKey) {
+    registerCanonical(getCanonicalEntityFieldKey(config.idName));
+  }
+
+  if (!orderedCanonicals.length) {
+    rowCanonicals.forEach((_, canonical) => registerCanonical(canonical));
+  }
+
+  return orderedCanonicals.map((canonical) => {
+    const templateAliases = templateCanonicals.get(canonical) || [];
+
+    let preferredKey = templateAliases[0] || config.idName;
+    if (!templateAliases[0] && canonicalIdCandidates.includes(canonical)) {
+      preferredKey = config.idName;
+    }
+
+    const configuredAliases = getConfiguredEntityAliases(config, preferredKey);
+    const aliasCanonicals = new Set();
+
+    templateAliases.forEach((alias) => {
+      aliasCanonicals.add(getCanonicalEntityFieldKey(alias));
+    });
+    configuredAliases.forEach((alias) => {
+      aliasCanonicals.add(getCanonicalEntityFieldKey(alias));
+    });
+
+    const rowAliases = [];
+    aliasCanonicals.forEach((aliasCanonical) => {
+      const candidates = rowCanonicals.get(aliasCanonical) || [];
+      candidates.forEach((alias) => {
+        if (!rowAliases.includes(alias)) {
+          rowAliases.push(alias);
+        }
+      });
+    });
+
+    const aliases = [];
+    [
+      preferredKey,
+      ...templateAliases,
+      ...configuredAliases,
+      ...rowAliases,
+    ].forEach((alias) => {
+      if (alias && !aliases.includes(alias)) {
+        aliases.push(alias);
+      }
+    });
+
+    const templateValue = readFirstEntityAliasValue(aliases, template);
+    const rowValue = readFirstEntityAliasValue(aliases, flattened);
+    const currentValue = hasMeaningfulEntityValue(rowValue)
+      ? rowValue
+      : templateValue;
+
+    return {
+      key: preferredKey,
+      aliases,
+      templateValue,
+      currentValue,
+    };
+  });
+}
+
+function getCanonicalEntityFieldKey(key) {
+  return String(key || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function getConfiguredEntityAliases(config, fieldKey) {
+  if (!config || !config.fieldAliases) {
+    return [];
+  }
+
+  const direct = config.fieldAliases[fieldKey];
+  if (Array.isArray(direct)) {
+    return direct;
+  }
+
+  const targetCanonical = getCanonicalEntityFieldKey(fieldKey);
+  for (const [configuredKey, aliases] of Object.entries(config.fieldAliases)) {
+    if (getCanonicalEntityFieldKey(configuredKey) === targetCanonical) {
+      return Array.isArray(aliases) ? aliases : [];
+    }
+  }
+
+  return [];
+}
+
+function readFirstEntityAliasValue(aliases, source) {
+  if (!source || typeof source !== "object") {
+    return undefined;
+  }
+
+  for (const alias of aliases) {
+    if (!Object.prototype.hasOwnProperty.call(source, alias)) {
+      continue;
+    }
+
+    const value = source[alias];
+    if (hasMeaningfulEntityValue(value)) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function hasMeaningfulEntityValue(value) {
+  if (value === undefined || value === null) {
+    return false;
+  }
+
+  if (typeof value === "string" && value.trim() === "") {
+    return false;
+  }
+
+  return true;
+}
+
+function collectEntityEditorPayload() {
+  const payload = {};
+  const controls = dom.entityFormFields?.querySelectorAll(
+    "[data-entity-field]",
+  );
+
+  if (!controls) {
+    return payload;
+  }
+
+  controls.forEach((control) => {
+    const key = control.dataset.entityField;
+    const valueType = control.dataset.entityValueType;
+    const raw = control.value;
+
+    if (valueType === "boolean") {
+      if (raw === "") {
+        payload[key] = "";
+        return;
+      }
+      payload[key] = raw === "true";
+      return;
+    }
+
+    if (valueType === "number") {
+      if (raw === "") {
+        payload[key] = "";
+        return;
+      }
+
+      const asNumber = Number(raw);
+      payload[key] = Number.isNaN(asNumber) ? raw : asNumber;
+      return;
+    }
+
+    payload[key] = raw;
+  });
+
+  return payload;
+}
+
+function clearEntityEditorForm() {
+  const controls = dom.entityFormFields?.querySelectorAll(
+    "[data-entity-field]",
+  );
+  if (!controls) {
+    return;
+  }
+
+  controls.forEach((control) => {
+    control.value = "";
+  });
+}
+
+function resolveEntityIdForMutation(payload, config) {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  const direct = payload[config.idName];
+  if (direct !== undefined && direct !== null && String(direct).trim() !== "") {
+    return String(direct).trim();
+  }
+
+  const inferred = inferIdFromRow(payload, config.idCandidates);
+  if (
+    inferred === undefined ||
+    inferred === null ||
+    String(inferred).trim() === ""
+  ) {
+    return "";
+  }
+
+  return String(inferred).trim();
+}
+
+function inferEntityFieldType(key, value, templateValue) {
+  if (typeof value === "boolean" || typeof templateValue === "boolean") {
+    return "boolean";
+  }
+
+  if (typeof value === "number" || typeof templateValue === "number") {
+    return "number";
+  }
+
+  const candidate = value ?? templateValue;
+  if (
+    /date|registration|check.?in|check.?out/i.test(key) ||
+    (typeof candidate === "string" &&
+      /^\d{4}-\d{2}-\d{2}/.test(candidate.trim()))
+  ) {
+    return "date";
+  }
+
+  return "text";
+}
+
+function coerceBooleanLikeValue(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    if (value === 1) {
+      return true;
+    }
+    if (value === 0) {
+      return false;
+    }
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "y"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "n"].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return null;
+}
+
+function renderEntityRowsTable(rows) {
+  if (!dom.entityTableHead || !dom.entityTableBody) {
+    return;
+  }
+
+  dom.entityTableHead.innerHTML = "";
+  dom.entityTableBody.innerHTML = "";
+
+  if (!rows.length) {
+    dom.entityTableHead.innerHTML = "<tr><th>Message</th></tr>";
+    dom.entityTableBody.innerHTML = "<tr><td>No data returned.</td></tr>";
+    return;
+  }
+
+  const keys = collectColumnKeys(rows, 8);
+  const headerRow = document.createElement("tr");
+
+  keys.forEach((key) => {
+    const th = document.createElement("th");
+    th.textContent = humanizeKey(key);
+    headerRow.appendChild(th);
+  });
+
+  dom.entityTableHead.appendChild(headerRow);
+
+  rows.forEach((row, index) => {
+    const tr = document.createElement("tr");
+    tr.className = "entity-record-row";
+    tr.dataset.entityRowIndex = String(index);
+    tr.classList.toggle("selected", state.selectedEntityRowIndex === index);
+
+    keys.forEach((key) => {
+      const td = document.createElement("td");
+      td.textContent = toDisplay(row[key]);
+      tr.appendChild(td);
+    });
+
+    dom.entityTableBody.appendChild(tr);
+  });
+}
+
+function updateEntityActionStates() {
+  const hasSelection = state.selectedEntityRowIndex !== null;
+
+  if (dom.entityUpdateBtn) {
+    dom.entityUpdateBtn.disabled = !hasSelection;
+  }
+
+  if (dom.entityDeleteBtn) {
+    dom.entityDeleteBtn.disabled = !hasSelection;
+  }
+}
+
+function setManagementSelectionMeta(message) {
+  if (dom.managementSelectionMeta) {
+    dom.managementSelectionMeta.textContent = message;
+  }
+}
+
+function singularEntityLabel(label) {
+  if (!label) {
+    return "record";
+  }
+
+  return label.endsWith("s") ? label.slice(0, -1) : label;
 }
 
 async function refreshSearchRooms() {
@@ -1160,7 +1647,7 @@ async function refreshSearchRooms() {
   state.searchResults = rows;
 
   renderTable(dom.searchResultsHead, dom.searchResultsBody, rows, {
-    actionLabel: "Use",
+    actionLabel: "Fill Form",
     actionAttribute: "data-row-index",
   });
 
@@ -1207,15 +1694,7 @@ async function refreshEmployeeBookings() {
   }
 
   const { rows, endpoint } = await fetchEmployeeBookings();
-  state.employeeBookings = rows.map(normalizeBookingRecord).filter((item) => {
-    return (
-      item.bookingId ||
-      item.custId ||
-      item.roomId ||
-      item.startDate ||
-      item.endDate
-    );
-  });
+  state.employeeBookings = rows.map(normalizeBookingRecord);
 
   applyEmployeeBookingFilters();
 
@@ -1234,8 +1713,89 @@ async function refreshEmployeeBookings() {
 
   setStatus(
     dom.bookingFilterStatus,
-    "Bookings loaded. Filter and click Use to auto-fill check-in.",
+    "Bookings loaded. Filter and click Fill Form to auto-fill check-in.",
     "ok",
+  );
+}
+
+async function refreshEmployeeRentings() {
+  if (state.role !== "ROLE_EMPLOYEE" || !state.username || !state.token) {
+    state.employeeRentings = [];
+    renderTable(dom.rentingResultsHead, dom.rentingResultsBody, []);
+    if (dom.rentingListMeta) {
+      dom.rentingListMeta.textContent = "Login as employee to load rentings.";
+    }
+    setStatus(
+      dom.rentingListStatus,
+      "Employee session required to load rentings.",
+      "warn",
+    );
+    return;
+  }
+
+  const { rows, endpoint } = await fetchEmployeeRentings();
+  state.employeeRentings = rows.map(normalizeRentingRecord);
+
+  const rowsForTable = state.employeeRentings.map((renting) => {
+    return {
+      rentingId: renting.rentingId || "-",
+      bookingId: renting.bookingId || "-",
+      custId: renting.custId || "-",
+      roomId: renting.roomId || "-",
+      employeeId: renting.employeeId || "-",
+      checkInDate: renting.checkInDate || "-",
+      checkOutDate: renting.checkOutDate || "-",
+      paymentAmount: renting.paymentAmount || "-",
+    };
+  });
+
+  renderTable(dom.rentingResultsHead, dom.rentingResultsBody, rowsForTable);
+
+  if (dom.rentingListMeta) {
+    dom.rentingListMeta.textContent = `${state.employeeRentings.length} renting(s) from ${endpoint}.`;
+  }
+
+  if (!state.employeeRentings.length) {
+    setStatus(
+      dom.rentingListStatus,
+      "No rentings were returned by the backend.",
+      "warn",
+    );
+    return;
+  }
+
+  setStatus(dom.rentingListStatus, "Rentings loaded.", "ok");
+}
+
+async function fetchEmployeeRentings() {
+  const endpoints = [
+    "/api/management/rentings",
+    "/api/management/renting",
+    "/api/management/rents",
+    "/api/management/rent",
+  ];
+
+  let lastError = null;
+
+  for (const endpoint of endpoints) {
+    try {
+      const payload = await apiRequest(endpoint);
+      const rows = extractRowsFromPayload(payload).filter((row) => {
+        return typeof row === "object" && row !== null && !Array.isArray(row);
+      });
+
+      if (Array.isArray(payload) || rows.length || payload === null) {
+        return { rows, endpoint };
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw new Error(
+    lastError instanceof Error
+      ? `Unable to fetch rentings: ${lastError.message}`
+      : "Unable to fetch rentings. Ensure a GET rentings endpoint is available.",
   );
 }
 
@@ -1252,7 +1812,7 @@ async function fetchEmployeeBookings() {
   for (const endpoint of endpoints) {
     try {
       const payload = await apiRequest(endpoint);
-      const rows = toArray(payload).filter((row) => {
+      const rows = extractRowsFromPayload(payload).filter((row) => {
         return typeof row === "object" && row !== null && !Array.isArray(row);
       });
 
@@ -1292,7 +1852,7 @@ function applyEmployeeBookingFilters() {
     dom.bookingFilterResultsBody,
     rowsForTable,
     {
-      actionLabel: "Use",
+      actionLabel: "Fill Form",
       actionAttribute: "data-booking-row-index",
     },
   );
@@ -1364,45 +1924,192 @@ function bookingMatchesFilters(booking, filters) {
 }
 
 function normalizeBookingRecord(row) {
+  const source = flattenObjectRow(row);
+
   return {
-    bookingId: readCandidateValue(row, [
-      "bookingId",
-      "bookingID",
-      "Booking_ID",
-      "booking_id",
-      "id",
-    ]),
-    custId: readCandidateValue(row, [
-      "custId",
-      "custID",
-      "customerId",
-      "customerID",
-      "Customer_ID",
-      "customer_id",
-    ]),
-    roomId: readCandidateValue(row, ["roomId", "roomID", "Room_ID", "room_id"]),
+    bookingId:
+      readCandidateValue(source, [
+        "bookingId",
+        "bookingID",
+        "Booking_ID",
+        "booking_id",
+        "id",
+      ]) ||
+      findValueByKeyPatterns(source, [/booking/i, /id/i]) ||
+      findValueByKeyPatterns(source, [/^id$/i]),
+    custId:
+      readCandidateValue(source, [
+        "custId",
+        "custID",
+        "customerId",
+        "customerID",
+        "Customer_ID",
+        "customer_id",
+      ]) || findValueByKeyPatterns(source, [/(cust|customer)/i, /id/i]),
+    roomId:
+      readCandidateValue(source, ["roomId", "roomID", "Room_ID", "room_id"]) ||
+      findValueByKeyPatterns(source, [/room/i, /id/i]),
     startDate: normalizeDateValue(
-      readCandidateValue(row, [
+      readCandidateValue(source, [
         "startDate",
         "checkInDate",
         "checkinDate",
         "fromDate",
         "start_date",
         "check_in_date",
-      ]),
+      ]) || findValueByKeyPatterns(source, [/(start|from|check.?in)/i]),
     ),
     endDate: normalizeDateValue(
-      readCandidateValue(row, [
+      readCandidateValue(source, [
         "endDate",
         "checkOutDate",
         "checkoutDate",
         "toDate",
         "end_date",
         "check_out_date",
-      ]),
+      ]) || findValueByKeyPatterns(source, [/(end|to|check.?out)/i]),
     ),
-    raw: row,
+    raw: source,
   };
+}
+
+function normalizeRentingRecord(row) {
+  const source = flattenObjectRow(row);
+
+  return {
+    rentingId:
+      readCandidateValue(source, [
+        "rentingId",
+        "rentingID",
+        "Renting_ID",
+        "renting_id",
+        "id",
+      ]) ||
+      findValueByKeyPatterns(source, [/rent/i, /id/i]) ||
+      findValueByKeyPatterns(source, [/^id$/i]),
+    bookingId:
+      readCandidateValue(source, [
+        "bookingId",
+        "bookingID",
+        "Booking_ID",
+        "booking_id",
+      ]) || findValueByKeyPatterns(source, [/booking/i, /id/i]),
+    custId:
+      readCandidateValue(source, [
+        "custId",
+        "custID",
+        "customerId",
+        "customerID",
+        "Customer_ID",
+        "customer_id",
+      ]) || findValueByKeyPatterns(source, [/(cust|customer)/i, /id/i]),
+    roomId:
+      readCandidateValue(source, ["roomId", "roomID", "Room_ID", "room_id"]) ||
+      findValueByKeyPatterns(source, [/room/i, /id/i]),
+    employeeId:
+      readCandidateValue(source, [
+        "employeeId",
+        "employeeID",
+        "Employee_ID",
+        "employee_id",
+      ]) || findValueByKeyPatterns(source, [/employee/i, /id/i]),
+    checkInDate: normalizeDateValue(
+      readCandidateValue(source, [
+        "checkInDate",
+        "checkinDate",
+        "startDate",
+        "fromDate",
+        "check_in_date",
+      ]) || findValueByKeyPatterns(source, [/(start|from|check.?in)/i]),
+    ),
+    checkOutDate: normalizeDateValue(
+      readCandidateValue(source, [
+        "checkOutDate",
+        "checkoutDate",
+        "endDate",
+        "toDate",
+        "check_out_date",
+      ]) || findValueByKeyPatterns(source, [/(end|to|check.?out)/i]),
+    ),
+    paymentAmount:
+      readCandidateValue(source, [
+        "paymentAmount",
+        "Payment_Amount",
+        "payment_amount",
+        "amount",
+      ]) || findValueByKeyPatterns(source, [/(payment|amount|price|total)/i]),
+    raw: source,
+  };
+}
+
+function flattenObjectRow(row) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) {
+    return {};
+  }
+
+  const flat = { ...row };
+
+  Object.values(row).forEach((value) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      Object.entries(value).forEach(([nestedKey, nestedValue]) => {
+        if (flat[nestedKey] === undefined) {
+          flat[nestedKey] = nestedValue;
+        }
+      });
+    }
+  });
+
+  return flat;
+}
+
+function findValueByKeyPatterns(source, patterns) {
+  for (const [key, value] of Object.entries(source)) {
+    if (value === undefined || value === null || String(value).trim() === "") {
+      continue;
+    }
+
+    const matchesAll = patterns.every((pattern) => pattern.test(key));
+    if (matchesAll) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function extractRowsFromPayload(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return toArray(payload);
+  }
+
+  const preferredKeys = [
+    "data",
+    "rows",
+    "results",
+    "result",
+    "bookings",
+    "items",
+    "content",
+    "payload",
+    "values",
+  ];
+
+  for (const key of preferredKeys) {
+    if (Array.isArray(payload[key])) {
+      return payload[key];
+    }
+  }
+
+  for (const value of Object.values(payload)) {
+    if (Array.isArray(value)) {
+      return value;
+    }
+  }
+
+  return toArray(payload);
 }
 
 function readCandidateValue(source, candidates) {
@@ -1433,51 +2140,153 @@ async function refreshEntityRows() {
   const rows = toArray(payload);
   state.entityRows = rows;
 
-  renderTable(dom.entityTableHead, dom.entityTableBody, rows, {
-    actionLabel: "Load",
-    actionAttribute: "data-load-row",
-    secondaryActionLabel: "Delete",
-    secondaryActionAttribute: "data-delete-row",
-  });
+  if (
+    state.selectedEntityRowIndex !== null &&
+    state.selectedEntityRowIndex >= rows.length
+  ) {
+    state.selectedEntityRowIndex = null;
+    updateEntityActionStates();
+    setManagementSelectionMeta("New record mode.");
+  }
+
+  renderEntityRowsTable(rows);
 
   dom.entityMeta.textContent = `${config.label}: ${rows.length} record(s).`;
-  setStatus(dom.managementStatus, `${config.label} list refreshed.`, "ok");
+  setStatus(
+    dom.managementStatus,
+    `${config.label} list refreshed. Click a row to edit it.`,
+    "ok",
+  );
 }
 
 async function refreshRequiredViews() {
-  const [availableRoomsPerArea, hotelCapacity] = await Promise.all([
+  const [availableRoomsPerArea, hotelCapacity] = await Promise.allSettled([
     apiRequest("/api/management/views/available-rooms-per-area"),
     apiRequest("/api/management/views/hotel-capacity"),
   ]);
 
-  renderDataset(
-    dom.viewAvailableRoomsPerArea,
-    availableRoomsPerArea,
-    "No rows returned.",
-  );
-  renderDataset(dom.viewHotelCapacity, hotelCapacity, "No rows returned.");
-  setStatus(dom.insightsStatus, "Required SQL views refreshed.", "ok");
+  const viewErrors = [];
+
+  if (availableRoomsPerArea.status === "fulfilled") {
+    renderDataset(
+      dom.viewAvailableRoomsPerArea,
+      availableRoomsPerArea.value,
+      "No rows returned.",
+    );
+  } else {
+    renderDataset(
+      dom.viewAvailableRoomsPerArea,
+      [],
+      `Could not load view: ${extractErrorMessage(availableRoomsPerArea.reason)}`,
+    );
+    viewErrors.push("available rooms per area");
+  }
+
+  if (hotelCapacity.status === "fulfilled") {
+    renderDataset(
+      dom.viewHotelCapacity,
+      hotelCapacity.value,
+      "No rows returned.",
+    );
+  } else {
+    renderDataset(
+      dom.viewHotelCapacity,
+      [],
+      `Could not load view: ${extractErrorMessage(hotelCapacity.reason)}`,
+    );
+    viewErrors.push("hotel capacity");
+  }
+
+  if (viewErrors.length) {
+    setStatus(
+      dom.insightsStatus,
+      `Views partially loaded. Failed: ${viewErrors.join(", ")}.`,
+      "warn",
+    );
+  } else {
+    setStatus(dom.insightsStatus, "Required SQL views refreshed.", "ok");
+  }
 }
 
 async function refreshExtraQueries() {
-  const [topSpending, topRated, stats, availableRooms] = await Promise.all([
-    apiRequest("/api/queries/top-spending-customer"),
-    apiRequest("/api/queries/top-rated-hotels"),
-    apiRequest("/api/queries/hotel-stats"),
-    apiRequest("/api/queries/available-rooms", {
-      query: {
-        hotelId: dom.queryHotelId.value.trim() || undefined,
-        startDate: dom.queryStartDate.value || undefined,
-        endDate: dom.queryEndDate.value || undefined,
-      },
-    }),
-  ]);
+  const [topSpending, topRated, stats, availableRooms] =
+    await Promise.allSettled([
+      apiRequest("/api/queries/top-spending-customer"),
+      apiRequest("/api/queries/top-rated-hotels"),
+      apiRequest("/api/queries/hotel-stats"),
+      apiRequest("/api/queries/available-rooms"),
+    ]);
 
-  renderDataset(dom.queryTopSpendingCustomer, topSpending, "No rows returned.");
-  renderDataset(dom.queryTopRatedHotels, topRated, "No rows returned.");
-  renderDataset(dom.queryHotelStats, stats, "No rows returned.");
-  renderDataset(dom.queryAvailableRooms, availableRooms, "No rows returned.");
-  setStatus(dom.insightsStatus, "Analytics endpoints refreshed.", "ok");
+  const queryErrors = [];
+
+  if (topSpending.status === "fulfilled") {
+    renderDataset(
+      dom.queryTopSpendingCustomer,
+      topSpending.value,
+      "No rows returned.",
+    );
+  } else {
+    renderDataset(
+      dom.queryTopSpendingCustomer,
+      [],
+      `Could not load query: ${extractErrorMessage(topSpending.reason)}`,
+    );
+    queryErrors.push("top spending customer");
+  }
+
+  if (topRated.status === "fulfilled") {
+    renderDataset(dom.queryTopRatedHotels, topRated.value, "No rows returned.");
+  } else {
+    renderDataset(
+      dom.queryTopRatedHotels,
+      [],
+      `Could not load query: ${extractErrorMessage(topRated.reason)}`,
+    );
+    queryErrors.push("top rated hotels");
+  }
+
+  if (stats.status === "fulfilled") {
+    renderDataset(dom.queryHotelStats, stats.value, "No rows returned.");
+  } else {
+    renderDataset(
+      dom.queryHotelStats,
+      [],
+      `Could not load query: ${extractErrorMessage(stats.reason)}`,
+    );
+    queryErrors.push("hotel stats");
+  }
+
+  if (availableRooms.status === "fulfilled") {
+    renderDataset(
+      dom.queryAvailableRooms,
+      availableRooms.value,
+      "No rows returned.",
+    );
+  } else {
+    renderDataset(
+      dom.queryAvailableRooms,
+      [],
+      `Could not load query: ${extractErrorMessage(availableRooms.reason)}`,
+    );
+    queryErrors.push("available rooms query");
+  }
+
+  if (queryErrors.length) {
+    setStatus(
+      dom.insightsStatus,
+      `Analytics partially loaded. Failed: ${queryErrors.join(", ")}.`,
+      "warn",
+    );
+  } else {
+    setStatus(dom.insightsStatus, "Analytics endpoints refreshed.", "ok");
+  }
+}
+
+function extractErrorMessage(error) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return String(error || "unknown error");
 }
 
 function renderTable(head, body, rows, actionConfig = {}) {
