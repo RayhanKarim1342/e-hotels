@@ -100,6 +100,24 @@ const ENTITY_CONFIG = {
       Problems_Damages: null,
     },
   },
+  bookings: {
+    label: "Bookings",
+    path: "/api/management/bookings",
+    idName: "bookingID",
+    idCandidates: ["bookingID", "bookingId", "id"],
+    // createTemplate: {
+    //   custID: "222-000-001",
+    //   roomID: 1,
+    //   startDate: "2026-05-01",
+    //   endDate: "2026-05-15",
+    // },
+    // updateTemplate: {
+    //   custID: "222-000-001",
+    //   roomID: 1,
+    //   startDate: "2026-05-01",
+    //   endDate: "2026-05-15",
+    // },
+  },
 };
 
 const SEARCH_FIELDS = [
